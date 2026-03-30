@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Paid Social Profitability Scorecard | SMPro</title>
+<meta name="description" content="Is your paid social actually profitable? Answer 7 questions and get an instant scorecard showing your MER, contribution margin and where profitability is leaking.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.socialmavenpro.co.uk/scorecard.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── TOKENS ── */
+  :root {
+    --bg:        #0E0E0D;
+    --bg2:       #161614;
+    --bg3:       #1A1A18;
+    --bg4:       #242420;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.14);
+    --text:      #F5F1EB;
+    --text2:     #9A9A92;
+    --text3:     #5C5C56;
+    --accent:    #FF4B2B;
+    --accent2:   #CC3A20;
+    --accent-bg: rgba(255,75,43,0.1);
+    --accent-border: rgba(255,75,43,0.35);
+    --green:     #2ECC71;
+    --green-bg:  rgba(46,204,113,0.1);
+    --amber:     #F39C12;
+    --amber-bg:  rgba(243,156,18,0.1);
+    --red:       #E74C3C;
+    --red-bg:    rgba(231,76,60,0.1);
+    --radius:    10px;
+    --radius-lg: 16px;
+    --font:      'DM Sans', sans-serif;
+    --heading:   'Syne', sans-serif;
+    --mono:      'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(255,75,43,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 10% 80%, rgba(255,140,66,0.04) 0%, transparent 55%);
+  }
+
+  /* ── LAYOUT ── */
+  .page-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── HEADER ── */
+  .site-header { display: none !important; }
+  .header-cta  { display: none !important; }
+
+  /* ── HERO ── */
+  .hero {
+    margin-bottom: 48px;
+  }
+
+  .hero-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,75,43,0.12);
+    border: 1px solid rgba(255,75,43,0.25);
+    padding: 0.3rem 0.85rem;
+    border-radius: 100px;
+  }
+
+  .hero-label::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .hero h1 {
+    font-family: var(--heading);
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 strong {
+    font-weight: 800;
+    background: linear-gradient(135deg, #FF4B2B 0%, #FF8C42 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 15px;
+    color: var(--text2);
+    max-width: 520px;
+    line-height: 1.7;
+  }
+
+  /* ── PROGRESS ── */
+  .progress-wrap {
+    margin-bottom: 40px;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+  }
+
+  .progress-pct {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .progress-track {
+    height: 2px;
+    background: var(--bg4);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    width: 14%;
+  }
+
+  /* ── STEP ── */
+  .step { display: none; animation: fadeUp 0.35s ease both; }
+  .step.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+
+  .step-title {
+    font-family: var(--heading);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.025em;
+    margin-bottom: 8px;
+    line-height: 1.25;
+  }
+
+  .step-sub {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 32px;
+    line-height: 1.65;
+    max-width: 520px;
+  }
+
+  /* ── INPUTS ── */
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.2s;
+  }
+
+  .field:focus-within { border-color: var(--accent-border); }
+
+  .field-label {
+    font-size: 13px;
+    color: var(--text2);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .field-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 7px;
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+
+  .field:focus-within .field-input-wrap {
+    border-color: var(--accent-border);
+  }
+
+  .field-prefix {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text3);
+    user-select: none;
+  }
+
+  .field-input-wrap input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    width: 100px;
+    padding: 8px 0;
+    text-align: right;
+  }
+
+  .field-input-wrap input::placeholder { color: var(--text3); }
+
+  /* ── RADIO OPTIONS ── */
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .radio-opt {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+  }
+
+  .radio-opt:hover { border-color: var(--border2); background: var(--bg3); }
+
+  .radio-opt.selected {
+    border-color: var(--accent-border);
+    background: var(--accent-bg);
+  }
+
+  .radio-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s;
+  }
+
+  .radio-opt.selected .radio-dot {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .radio-opt.selected .radio-dot::after {
+    content: '';
+    width: 5px;
+    height: 5px;
+    background: white;
+    border-radius: 50%;
+  }
+
+  .radio-text { flex: 1; }
+
+  .radio-label {
+    font-size: 14px;
+    color: var(--text);
+    display: block;
+  }
+
+  .radio-opt.selected .radio-label { color: var(--text); }
+
+  .radio-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg4);
+    color: var(--text3);
+    flex-shrink: 0;
+  }
+
+  .radio-opt.selected .radio-badge {
+    background: rgba(255,75,43,0.15);
+    color: var(--accent);
+  }
+
+  /* ── NAV BUTTONS ── */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+  }
+
+  .btn-back {
+    background: none;
+    border: none;
+    font-family: var(--font);
+    font-size: 13px;
+    color: var(--text3);
+    cursor: pointer;
+    padding: 8px 0;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-back:hover { color: var(--text2); }
+
+  .btn-next {
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 100px;
+    padding: 11px 28px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    letter-spacing: -0.01em;
+    box-shadow: 0 4px 20px rgba(255,75,43,0.3);
+  }
+
+  .btn-next:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,75,43,0.4); }
+  .btn-next:active { transform: scale(0.98); }
+
+  /* ── RESULTS ── */
+  .results-header {
+    margin-bottom: 36px;
+  }
+
+  .overall-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 16px;
+  }
+
+  .overall-score-num {
+    font-family: var(--heading);
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  .overall-score-denom {
+    font-size: 20px;
+    color: var(--text3);
+    font-weight: 300;
+  }
+
+  .overall-tier {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    margin-bottom: 4px;
+    display: inline-block;
+  }
+
+  .overall-desc {
+    font-size: 13px;
+    color: var(--text2);
+    text-align: right;
+  }
+
+  /* ── METRIC GRID ── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .metric-card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .metric-card-value {
+    font-family: var(--heading);
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .metric-card-sub {
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  /* ── PILLAR BARS ── */
+  .section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .pillar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .pillar-name {
+    font-size: 13px;
+    color: var(--text2);
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+
+  .pillar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--bg4);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .pillar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .pillar-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── INSIGHT CARDS ── */
+  .insight-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 10px;
+  }
+
+  .insight-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    display: inline-block;
+    margin-bottom: 10px;
+  }
+
+  .insight-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+
+  .insight-body {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+
+  /* ── CTA ── */
+  .cta-block {
+    margin-top: 40px;
+    padding: 36px;
+    background: var(--bg2);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-lg);
+    text-align: center;
+  }
+
+  .cta-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+
+  .cta-title {
+    font-family: var(--heading);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin-bottom: 10px;
+    line-height: 1.25;
+  }
+
+  .cta-body {
+    font-size: 14px;
+    color: var(--text2);
+    max-width: 420px;
+    margin: 0 auto 24px;
+    line-height: 1.65;
+  }
+
+  .btn-cta {
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 100px;
+    padding: 13px 32px;
+    cursor: pointer;
+    letter-spacing: -0.01em;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    display: inline-block;
+    box-shadow: 0 4px 20px rgba(255,75,43,0.3);
+  }
+
+  .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(255,75,43,0.4); }
+  .btn-cta:active { transform: scale(0.98); }
+
+  .restart-link {
+    display: block;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text3);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: var(--font);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.2s;
+  }
+
+  .restart-link:hover { color: var(--text2); }
+
+  /* ── FOOTER ── */
+  .site-footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 0;
+    margin-top: 80px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 520px) {
+    .site-header { display: none !important; }
+    .metric-grid { grid-template-columns: 1fr 1fr; }
+    .pillar-name { min-width: 120px; font-size: 12px; }
+    .overall-row { flex-direction: column; align-items: flex-start; }
+    .overall-desc { text-align: left; }
+    .cta-block { padding: 24px 20px; }
+    .field { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .field-input-wrap { width: 100%; }
+    .field-input-wrap input { width: 100%; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<!-- MOBILE MENU -->
+<div style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(14,14,13,0.98);z-index:199;flex-direction:column;align-items:center;justify-content:center;gap:2.5rem" id="scMobileMenu">
+  <button onclick="document.getElementById('scMobileMenu').style.display='none'" style="position:absolute;top:1.5rem;right:1.5rem;background:none;border:none;color:#7A7A72;font-size:2rem;cursor:pointer">&#215;</button>
+  <a href="index.html" style="font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#7A7A72;text-decoration:none">Home</a>
+  <a href="index.html#services" style="font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#7A7A72;text-decoration:none">Services</a>
+  <a href="portfolio.html" style="font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#7A7A72;text-decoration:none">Portfolio</a>
+  <a href="scorecard.html" style="font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#FF4B2B;text-decoration:none">Free Scorecard</a>
+  <a href="https://calendly.com/bradley-socialmavenpro/30min" target="_blank" style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;background:#FF4B2B;color:#fff;padding:0.85rem 2rem;border-radius:100px;text-decoration:none">Book a call</a>
+</div>
+
+<!-- NAV -->
+<nav style="position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:1.1rem 2.5rem;background:rgba(14,14,13,0.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,0.08)">
+  <a href="index.html" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;letter-spacing:-0.02em;color:#F5F1EB;text-decoration:none">SM<span style="color:#FF4B2B">Pro</span></a>
+  <ul style="display:flex;gap:2rem;list-style:none;align-items:center;margin:0;padding:0" class="sc-nav-links">
+    <li><a href="index.html#services" style="font-size:0.875rem;color:#7A7A72;text-decoration:none">Services</a></li>
+    <li><a href="portfolio.html" style="font-size:0.875rem;color:#7A7A72;text-decoration:none">Portfolio</a></li>
+    <li><a href="playbooks.html" style="font-size:0.85rem;color:#7A7A72;text-decoration:none;font-weight:400;transition:color 0.2s" onmouseover="this.style.color='#F5F1EB'" onmouseout="this.style.color='#7A7A72'">How I Work</a></li>
+    <li><a href="scorecard.html" style="font-size:0.875rem;color:#FF4B2B;text-decoration:none;font-weight:500">Free Scorecard</a></li>
+    <li><a href="https://calendly.com/bradley-socialmavenpro/30min" target="_blank" style="background:#FF4B2B;color:#fff;font-size:0.875rem;font-weight:500;padding:0.55rem 1.25rem;border-radius:100px;text-decoration:none">Book a call</a></li>
+  </ul>
+  <button onclick="document.getElementById('scMobileMenu').style.display='flex'" style="display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;background:none;border:none" id="scHamburger" aria-label="Open menu">
+    <span style="display:block;width:22px;height:2px;background:#F5F1EB;border-radius:2px"></span>
+    <span style="display:block;width:22px;height:2px;background:#F5F1EB;border-radius:2px"></span>
+    <span style="display:block;width:22px;height:2px;background:#F5F1EB;border-radius:2px"></span>
+  </button>
+</nav>
+
+<style>
+@media(max-width:900px){
+  .sc-nav-links{display:none!important}
+  #scHamburger{display:flex!important}
+}
+</style>
+
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <header class="site-header" style="display:none"></header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-label">Free tool</div>
+    <h1>Is your paid social<br><strong>actually profitable?</strong></h1>
+    <p>Answer 7 questions and get an instant scorecard showing your MER, contribution margin, and where your profitability is leaking — with no email required.</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span class="progress-label" id="prog-label">Step 1 of 7</span>
+      <span class="progress-pct" id="prog-pct">14%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="prog-fill"></div>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step active" id="s1">
+    <div class="step-eyebrow">Revenue &amp; spend</div>
+    <div class="step-title">Start with your last 30 days</div>
+    <div class="step-sub">These three numbers form the foundation of your MER calculation. Use total figures, not just one channel.</div>
+    <div class="field-group">
+      <div class="field">
+        <span class="field-label">Total revenue (all channels)</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="rev" placeholder="0" min="0"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Total paid social ad spend</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="spend" placeholder="0" min="0"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Platform-reported ROAS</span>
+        <div class="field-input-wrap"><span class="field-prefix">×</span><input type="number" id="roas" placeholder="0.0" step="0.1" min="0"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <span></span>
+      <button class="btn-next" onclick="next(1)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step" id="s2">
+    <div class="step-eyebrow">Cost of goods</div>
+    <div class="step-title">What does each order actually cost you?</div>
+    <div class="step-sub">This unlocks your contribution margin — the profit remaining after product and fulfilment costs, before ad spend is deducted.</div>
+    <div class="field-group">
+      <div class="field">
+        <span class="field-label">Average order value (AOV)</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="aov" placeholder="0" min="0"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">COGS per order (incl. fulfilment)</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="cogs" placeholder="0" min="0"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(2)">&larr; Back</button>
+      <button class="btn-next" onclick="next(2)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step" id="s3">
+    <div class="step-eyebrow">Customer mix</div>
+    <div class="step-title">What percentage of sales are new customers?</div>
+    <div class="step-sub">New customer acquisition rate reveals whether your paid social is genuinely growing the business or recycling your existing base.</div>
+    <div class="radio-group" id="ncr-group">
+      <div class="radio-opt" onclick="selectRadio('ncr','gt70',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">More than 70% new customers</span></div>
+        <span class="radio-badge">Strong acquisition</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('ncr','50to70',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">50–70% new customers</span></div>
+        <span class="radio-badge">Healthy balance</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('ncr','30to50',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">30–50% new customers</span></div>
+        <span class="radio-badge">Skewing to retention</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('ncr','lt30',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Less than 30% new customers</span></div>
+        <span class="radio-badge">Heavy reliance on existing base</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('ncr','dontknow',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">I don't track this</span></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(3)">&larr; Back</button>
+      <button class="btn-next" onclick="next(3)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="step" id="s4">
+    <div class="step-eyebrow">Attribution model</div>
+    <div class="step-title">How are you measuring conversions?</div>
+    <div class="step-sub">Your attribution model determines how accurately you can read performance. Platform-reported ROAS and true MER can differ by 40–80% — this gap is critical.</div>
+    <div class="radio-group" id="attr-group">
+      <div class="radio-opt" onclick="selectRadio('attr','mmm',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Media mix modelling or incrementality testing</span></div>
+        <span class="radio-badge">Gold standard</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('attr','mer',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Blended MER (revenue ÷ total spend)</span></div>
+        <span class="radio-badge">Most accurate</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('attr','lastclick',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Last-click (GA4 or Shopify default)</span></div>
+        <span class="radio-badge">Often misleading</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('attr','platform',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Platform-reported only (Meta / TikTok)</span></div>
+        <span class="radio-badge">Significantly over-reported</span>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('attr','none',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">No formal attribution model</span></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(4)">&larr; Back</button>
+      <button class="btn-next" onclick="next(4)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="step" id="s5">
+    <div class="step-eyebrow">Overhead &amp; operating costs</div>
+    <div class="step-title">What sits between gross margin and net profit?</div>
+    <div class="step-sub">Exclude COGS — that's already captured. Include agency fees, SaaS tools, team costs, and any other regular operating expenses.</div>
+    <div class="field-group">
+      <div class="field">
+        <span class="field-label">Monthly overheads &amp; opex</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="opex" placeholder="0" min="0"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Agency / management fees</span>
+        <div class="field-input-wrap"><span class="field-prefix">£</span><input type="number" id="fees" placeholder="0" min="0"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(5)">&larr; Back</button>
+      <button class="btn-next" onclick="next(5)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 6 -->
+  <div class="step" id="s6">
+    <div class="step-eyebrow">Scaling behaviour</div>
+    <div class="step-title">What happens when you increase budget?</div>
+    <div class="step-sub">This reveals the structural health of your account — creative depth, audience breadth, and whether there's genuine room to scale profitably.</div>
+    <div class="radio-group" id="scale-group">
+      <div class="radio-opt" onclick="selectRadio('scale','efficient',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">MER stays stable or improves as we scale</span></div>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('scale','slight',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Slight MER drop — still profitable above break-even</span></div>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('scale','cliff',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">MER drops sharply — we hit a ceiling fast</span></div>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('scale','untested',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">We haven't tested scaling yet</span></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(6)">&larr; Back</button>
+      <button class="btn-next" onclick="next(6)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 7 -->
+  <div class="step" id="s7">
+    <div class="step-eyebrow">Break-even clarity</div>
+    <div class="step-title">Do you know your MER break-even point?</div>
+    <div class="step-sub">Your break-even MER is the minimum revenue-to-spend ratio needed to cover all costs. Knowing this number transforms scaling decisions from guesswork into strategy.</div>
+    <div class="radio-group" id="be-group">
+      <div class="radio-opt" onclick="selectRadio('be','yes',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Yes — we have a defined break-even MER target</span></div>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('be','approx',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">Approximately — we have a rough figure</span></div>
+      </div>
+      <div class="radio-opt" onclick="selectRadio('be','no',this)">
+        <div class="radio-dot"></div>
+        <div class="radio-text"><span class="radio-label">No — this hasn't been calculated</span></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(7)">&larr; Back</button>
+      <button class="btn-next" onclick="showResults()">View my scorecard &rarr;</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="step" id="results">
+    <div id="results-content"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <span>&copy; 2026 SMPro &middot; socialmavenpro.co.uk</span>
+    <span>Paid Social Specialist · DTC Brands</span>
+  </footer>
+
+</div>
+
+<script>
+  const state = { ncr: null, attr: null, scale: null, be: null };
+  const TOTAL = 7;
+  let cur = 1;
+
+  function setProgress(n) {
+    const pct = Math.round((n / TOTAL) * 100);
+    document.getElementById('prog-fill').style.width = pct + '%';
+    document.getElementById('prog-pct').textContent = pct + '%';
+    document.getElementById('prog-label').textContent = n <= TOTAL ? 'Step ' + n + ' of ' + TOTAL : 'Complete';
+  }
+
+  function selectRadio(group, val, el) {
+    state[group] = val;
+    document.querySelectorAll('#' + group + '-group .radio-opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function next(from) {
+    document.getElementById('s' + from).classList.remove('active');
+    cur = from + 1;
+    document.getElementById('s' + cur).classList.add('active');
+    setProgress(cur);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function back(from) {
+    document.getElementById('s' + from).classList.remove('active');
+    cur = from - 1;
+    document.getElementById('s' + cur).classList.add('active');
+    setProgress(cur);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function fmt2(n) { return isNaN(n) ? '—' : n.toFixed(2); }
+  function fmt1(n) { return isNaN(n) ? '—' : n.toFixed(1); }
+  function fmtMoney(n) { return isNaN(n) ? '—' : '£' + Math.round(n).toLocaleString('en-GB'); }
+
+  function showResults() {
+    document.getElementById('s7').classList.remove('active');
+    document.getElementById('results').classList.add('active');
+    document.getElementById('prog-fill').style.width = '100%';
+    document.getElementById('prog-pct').textContent = '100%';
+    document.getElementById('prog-label').textContent = 'Complete';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    const rev   = parseFloat(document.getElementById('rev').value)  || 0;
+    const spend = parseFloat(document.getElementById('spend').value) || 0;
+    const roas  = parseFloat(document.getElementById('roas').value)  || 0;
+    const aov   = parseFloat(document.getElementById('aov').value)   || 0;
+    const cogs  = parseFloat(document.getElementById('cogs').value)  || 0;
+    const opex  = parseFloat(document.getElementById('opex').value)  || 0;
+    const fees  = parseFloat(document.getElementById('fees').value)  || 0;
+
+    const mer         = spend > 0 ? rev / spend : 0;
+    const cm          = aov > 0 ? ((aov - cogs) / aov) * 100 : 0;
+    const grossProfit = rev * (cm / 100);
+    const netProfit   = grossProfit - spend - opex - fees;
+    const netMargin   = rev > 0 ? (netProfit / rev) * 100 : 0;
+    const roasDelta   = (mer > 0 && roas > 0) ? ((roas - mer) / mer * 100) : 0;
+
+    function scores() {
+      const s = {};
+      if      (mer >= 4)   s.mer = 100;
+      else if (mer >= 3)   s.mer = 75;
+      else if (mer >= 2)   s.mer = 50;
+      else if (mer >= 1.5) s.mer = 30;
+      else                 s.mer = 10;
+
+      if      (cm >= 60) s.cm = 100;
+      else if (cm >= 40) s.cm = 75;
+      else if (cm >= 25) s.cm = 50;
+      else if (cm >= 15) s.cm = 30;
+      else               s.cm = 10;
+
+      s.ncr   = { gt70: 100, '50to70': 75, '30to50': 50, lt30: 25, dontknow: 5 }[state.ncr]  || 30;
+      s.attr  = { mmm: 100, mer: 85, lastclick: 40, platform: 20, none: 5 }[state.attr]       || 20;
+      s.scale = { efficient: 100, slight: 65, cliff: 30, untested: 20 }[state.scale]           || 30;
+      s.be    = { yes: 100, approx: 60, no: 10 }[state.be]                                     || 10;
+      return s;
+    }
+
+    const p = scores();
+    const overall = Math.round(p.mer*0.25 + p.cm*0.2 + p.ncr*0.15 + p.attr*0.2 + p.scale*0.1 + p.be*0.1);
+
+    const tiers = [
+      { min: 80, label: 'High performer',      color: '#4caf82' },
+      { min: 60, label: 'Progressing',         color: '#e8a535' },
+      { min: 40, label: 'At risk',             color: '#e05252' },
+      { min: 0,  label: 'Needs intervention',  color: '#e05252' },
+    ];
+    const tier = tiers.find(t => overall >= t.min);
+
+    function pillarTag(score) {
+      if (score >= 75) return `<span class="pillar-tag" style="background:rgba(76,175,130,0.12);color:#4caf82">Strong</span>`;
+      if (score >= 45) return `<span class="pillar-tag" style="background:rgba(232,165,53,0.12);color:#e8a535">Watch</span>`;
+      return `<span class="pillar-tag" style="background:rgba(224,82,82,0.12);color:#e05252">Critical</span>`;
+    }
+
+    function pillarColor(score) {
+      if (score >= 75) return '#4caf82';
+      if (score >= 45) return '#e8a535';
+      return '#e05252';
+    }
+
+    function insightBadge(type) {
+      if (type === 'good')    return `<span class="insight-badge" style="background:rgba(76,175,130,0.12);color:#4caf82">Strength</span>`;
+      if (type === 'warn')    return `<span class="insight-badge" style="background:rgba(232,165,53,0.12);color:#e8a535">Watch</span>`;
+      return `<span class="insight-badge" style="background:rgba(224,82,82,0.12);color:#e05252">Priority fix</span>`;
+    }
+
+    const insights = [];
+
+    if (mer < 2 && spend > 0)
+      insights.push({ type: 'danger', title: 'MER is below break-even for most business models', body: `A MER of ${fmt2(mer)}x means for every £1 spent on ads, you are generating less than £2 in total revenue. Unless your contribution margins are exceptionally high, this is unlikely to be sustainable at scale.` });
+
+    if (roas > 0 && mer > 0 && roasDelta > 40)
+      insights.push({ type: 'danger', title: 'Significant gap between platform ROAS and blended MER', body: `Your platform reports ${fmt1(roas)}x ROAS but your blended MER is ${fmt2(mer)}x — a ${Math.round(roasDelta)}% discrepancy. This is a classic sign of attribution inflation. Platforms take credit for sales that would have occurred organically.` });
+
+    if (cm < 30 && aov > 0)
+      insights.push({ type: 'warn', title: 'Contribution margin may be too thin to profitably scale paid social', body: `At ${fmt1(cm)}% contribution margin, you have limited headroom before ad spend erodes profitability. Consider pricing strategy, COGS reduction, or AOV optimisation before scaling spend further.` });
+
+    if (state.ncr === 'dontknow' || state.ncr === 'lt30')
+      insights.push({ type: 'warn', title: 'New customer rate signals limited acquisition effectiveness', body: 'A low or unknown new customer rate suggests your paid social budget may be largely recapturing existing customers — an expensive approach that email or loyalty programmes could handle at a fraction of the cost.' });
+
+    if (state.attr === 'platform' || state.attr === 'none')
+      insights.push({ type: 'danger', title: 'Attribution model creates significant blind spots', body: "Relying on platform-reported data or no attribution model makes it impossible to confidently scale or cut spend. You risk funding channels that look profitable but aren't, and defunding ones that genuinely are." });
+
+    if (state.be === 'no')
+      insights.push({ type: 'warn', title: 'No defined break-even MER — scaling decisions are being made blind', body: 'Without a calculated break-even MER, every budget decision is a guess. Your break-even MER is: (total costs) ÷ (total ad spend). Knowing this single number transforms paid social from a cost centre to a controllable growth lever.' });
+
+    if (insights.length === 0)
+      insights.push({ type: 'good', title: 'Strong overall profitability structure', body: 'Your inputs suggest a well-structured paid social operation with healthy margins, credible attribution, and clear break-even awareness. The priority now is incrementality testing and scaling into new audiences to sustain performance.' });
+
+    const netColor  = netProfit >= 0 ? '#4caf82' : '#e05252';
+    const margColor = netMargin >= 15 ? '#4caf82' : netMargin >= 5 ? '#e8a535' : '#e05252';
+
+    document.getElementById('results-content').innerHTML = `
+
+      <div class="results-header">
+        <div style="font-size:0.65rem;font-weight:600;color:var(--accent);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">PROFITABILITY SCORECARD</div>
+        <div class="overall-row">
+          <div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Overall score</div>
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <span class="overall-score-num" style="color:${tier.color}">${overall}</span>
+              <span class="overall-score-denom">/ 100</span>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <span class="overall-tier" style="background:${tier.color}18;color:${tier.color}">${tier.label}</span>
+          </div>
+        </div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:16px">
+          <div style="height:100%;width:${overall}%;background:${tier.color};border-radius:2px;transition:width 1s cubic-bezier(0.4,0,0.2,1)"></div>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-card-label">Blended MER</div>
+          <div class="metric-card-value">${spend > 0 ? fmt2(mer) + '×' : '—'}</div>
+          <div class="metric-card-sub">Revenue ÷ ad spend</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Contribution margin</div>
+          <div class="metric-card-value">${aov > 0 ? fmt1(cm) + '%' : '—'}</div>
+          <div class="metric-card-sub">After COGS &amp; fulfilment</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Estimated net profit</div>
+          <div class="metric-card-value" style="color:${netColor}">${rev > 0 ? fmtMoney(netProfit) : '—'}</div>
+          <div class="metric-card-sub">After all costs this month</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Net margin</div>
+          <div class="metric-card-value" style="color:${margColor}">${rev > 0 ? fmt1(netMargin) + '%' : '—'}</div>
+          <div class="metric-card-sub">Net profit ÷ revenue</div>
+        </div>
+      </div>
+
+      <div class="section-label">Pillar breakdown</div>
+
+      ${[
+        ['MER efficiency',            p.mer],
+        ['Attribution quality',       p.attr],
+        ['Contribution margin',       p.cm],
+        ['Customer acquisition mix',  p.ncr],
+        ['Scalability',               p.scale],
+        ['Break-even clarity',        p.be],
+      ].map(([label, score]) => `
+        <div class="pillar-row">
+          <div class="pillar-name">${label}</div>
+          <div class="pillar-track">
+            <div class="pillar-fill" style="width:${score}%;background:${pillarColor(score)}"></div>
+          </div>
+          ${pillarTag(score)}
+        </div>
+      `).join('')}
+
+      <div class="section-label" style="margin-top:32px">Key observations</div>
+
+      ${insights.map(i => `
+        <div class="insight-card">
+          ${insightBadge(i.type === 'danger' ? 'danger' : i.type === 'warn' ? 'warn' : 'good')}
+          <div class="insight-title">${i.title}</div>
+          <div class="insight-body">${i.body}</div>
+        </div>
+      `).join('')}
+
+      <div class="cta-block">
+        <div class="cta-eyebrow">FREE 30-MINUTE REVIEW</div>
+        <div class="cta-title">Want to see what this looks like<br>at 2× your current spend?</div>
+        <div class="cta-body">No slides, no pitch. Just your numbers and a clear picture of where the ceiling is — and how to raise it.</div>
+        <a href="https://calendly.com/bradley-socialmavenpro/30min" target="_blank" class="btn-cta">Book a free call &rarr;</a>
+        <button class="restart-link" onclick="restart()">Start over with different numbers</button>
+      </div>
+    `;
+  }
+
+  function restart() {
+    document.getElementById('results').classList.remove('active');
+    cur = 1;
+    document.getElementById('s1').classList.add('active');
+    setProgress(1);
+    ['rev','spend','roas','aov','cogs','opex','fees'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    ['ncr','attr','scale','be'].forEach(g => {
+      state[g] = null;
+      document.querySelectorAll('#' + g + '-group .radio-opt').forEach(o => o.classList.remove('selected'));
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
