@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Pacing Calculator — Social Maven Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange: #ff4b2b;
+      --orange-light: #F4A76A;
+      --orange-dim: rgba(255, 75, 43, 0.15);
+      --bg: #0E0E0E;
+      --surface: #161616;
+      --surface-2: #1E1E1E;
+      --surface-3: #262626;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.15);
+      --text-primary: #F0EDE6;
+      --text-secondary: #888580;
+      --text-muted: #555250;
+      --green: #3DB87A;
+      --green-dim: rgba(61,184,122,0.12);
+      --red: #E05252;
+      --red-dim: rgba(224,82,82,0.12);
+      --amber: #E0A830;
+      --amber-dim: rgba(224,168,48,0.12);
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .header-left {}
+
+    .brand {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      color: var(--orange);
+      margin-bottom: 0.5rem;
+    }
+
+    .page-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 28px;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      font-weight: 300;
+    }
+
+    .header-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--orange);
+      background: var(--orange-dim);
+      border: 0.5px solid rgba(255,75,43,0.3);
+      border-radius: 20px;
+      padding: 5px 12px;
+      white-space: nowrap;
+      margin-top: 4px;
+    }
+
+    /* Section label */
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Inputs */
+    .inputs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-group label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .input-group input {
+      background: var(--surface-2);
+      border: 0.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-primary);
+      width: 100%;
+      transition: border-color 0.15s;
+      -moz-appearance: textfield;
+    }
+
+    .input-group input::-webkit-outer-spin-button,
+    .input-group input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--orange);
+      background: var(--surface-3);
+    }
+
+    /* Pacing bar */
+    .pacing-section { margin-bottom: 0; }
+
+    .bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .bar-track {
+      height: 6px;
+      background: var(--surface-3);
+      border-radius: 3px;
+      position: relative;
+      overflow: visible;
+      margin-bottom: 8px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+      max-width: 100%;
+    }
+
+    .bar-marker {
+      position: absolute;
+      top: -5px;
+      width: 2px;
+      height: 16px;
+      background: var(--text-secondary);
+      border-radius: 1px;
+      transition: left 0.4s ease;
+    }
+
+    .bar-marker::after {
+      content: 'ideal';
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .bar-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 20px;
+    }
+
+    /* Verdict */
+    .verdict {
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .verdict.on-track {
+      background: var(--amber-dim);
+      border: 0.5px solid rgba(224,168,48,0.25);
+      color: var(--amber);
+    }
+
+    .verdict.ahead {
+      background: var(--green-dim);
+      border: 0.5px solid rgba(61,184,122,0.25);
+      color: var(--green);
+    }
+
+    .verdict.behind {
+      background: var(--red-dim);
+      border: 0.5px solid rgba(224,82,82,0.25);
+      color: var(--red);
+    }
+
+    .verdict-icon {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+
+    .verdict.on-track .verdict-icon { background: var(--amber); }
+    .verdict.ahead .verdict-icon { background: var(--green); }
+    .verdict.behind .verdict-icon { background: var(--red); }
+
+    /* Metrics grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .metric {
+      background: var(--surface-2);
+      border: 0.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric-value {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-primary);
+    }
+
+    .metric-value.good { color: var(--green); }
+    .metric-value.warn { color: var(--amber); }
+    .metric-value.bad { color: var(--red); }
+
+    /* Projection table */
+    .proj-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .proj-table tr {
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .proj-table tr:last-child { border-bottom: none; }
+
+    .proj-table td {
+      padding: 9px 0;
+      font-size: 13px;
+    }
+
+    .proj-table td:first-child {
+      color: var(--text-secondary);
+      font-weight: 300;
+    }
+
+    .proj-table td:last-child {
+      text-align: right;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    /* Platform split */
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .platform-card {
+      background: var(--surface-2);
+      border: 0.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .platform-name {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .platform-input {
+      background: var(--surface-3);
+      border: 0.5px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      width: 100%;
+      -moz-appearance: textfield;
+      transition: border-color 0.15s;
+    }
+
+    .platform-input::-webkit-outer-spin-button,
+    .platform-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    .platform-input:focus {
+      outline: none;
+      border-color: var(--orange);
+    }
+
+    .platform-pct {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      font-weight: 400;
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 0.5px solid var(--border);
+      margin: 1.5rem 0;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 0.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-brand {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      color: var(--orange);
+    }
+
+    .footer-brand span { color: var(--orange); }
+
+    .footer-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .footer-link:hover { color: var(--orange); }
+
+    /* Responsive */
+    @media (max-width: 520px) {
+      .inputs-grid { grid-template-columns: 1fr 1fr; }
+      .metrics-grid { grid-template-columns: 1fr 1fr; }
+      .metrics-grid .metric:last-child { grid-column: span 2; }
+      .platform-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; gap: 12px; }
+      .page-title { font-size: 22px; }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card { animation: fadeIn 0.3s ease both; }
+    .card:nth-child(1) { animation-delay: 0.05s; }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="header">
+      <div class="header-left">
+        <div class="brand">SM<span style="color:var(--text-secondary);font-weight:700;">Pro</span></div>
+        <h1 class="page-title">Budget Pacing<br>Calculator</h1>
+        <p class="page-subtitle">Track spend vs ideal pace across your paid social campaigns.</p>
+      </div>
+      <div class="header-badge">Paid Social Tool</div>
+    </div>
+
+    <!-- Inputs -->
+    <div class="card">
+      <div class="section-label">Campaign details</div>
+      <div class="inputs-grid">
+        <div class="input-group">
+          <label>Monthly budget (£)</label>
+          <input type="number" id="budget" value="5000" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Spent to date (£)</label>
+          <input type="number" id="spent" value="2100" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Days in month</label>
+          <input type="number" id="days-total" value="30" min="1" max="31" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Days elapsed</label>
+          <input type="number" id="days-elapsed" value="14" min="0" oninput="calc()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Verdict -->
+    <div id="verdict" class="verdict on-track">
+      <span class="verdict-icon"></span>
+      <span id="verdict-text">Calculating...</span>
+    </div>
+
+    <!-- Pacing bar -->
+    <div class="card pacing-section">
+      <div class="section-label">Spend vs ideal pace</div>
+      <div class="bar-header">
+        <span id="bar-label-spent">Spent: £0</span>
+        <span id="bar-label-budget">Budget: £0</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="bar-fill" style="width:0%; background: var(--orange);"></div>
+        <div class="bar-marker" id="bar-marker" style="left:0%;"></div>
+      </div>
+      <div class="bar-footer">
+        <span>Ideal pace: <strong id="ideal-pct" style="color:var(--text-secondary);">0%</strong></span>
+        <span>Actual: <strong id="actual-pct" style="color:var(--text-secondary);">0%</strong></span>
+      </div>
+    </div>
+
+    <!-- Key metrics -->
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-label">Daily budget</div>
+        <div class="metric-value" id="daily-budget">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Ideal spent</div>
+        <div class="metric-value" id="ideal-spent">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Over / Under</div>
+        <div class="metric-value" id="over-under">—</div>
+      </div>
+    </div>
+
+    <!-- Projections -->
+    <div class="card">
+      <div class="section-label">Projections</div>
+      <table class="proj-table">
+        <tr>
+          <td>Projected month-end spend</td>
+          <td id="proj-eom">—</td>
+        </tr>
+        <tr>
+          <td>Budget remaining</td>
+          <td id="budget-remaining">—</td>
+        </tr>
+        <tr>
+          <td>Days remaining</td>
+          <td id="days-remaining">—</td>
+        </tr>
+        <tr>
+          <td>Required daily spend to hit budget</td>
+          <td id="req-daily">—</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Platform split -->
+    <div class="card">
+      <div class="section-label">Platform split (optional)</div>
+      <div class="platform-grid">
+        <div class="platform-card">
+          <div class="platform-name">Meta</div>
+          <input type="number" class="platform-input" id="p-meta" placeholder="£ spent" min="0" oninput="calcPlatforms()">
+          <div class="platform-pct" id="pct-meta">— of total</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">TikTok</div>
+          <input type="number" class="platform-input" id="p-tiktok" placeholder="£ spent" min="0" oninput="calcPlatforms()">
+          <div class="platform-pct" id="pct-tiktok">— of total</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">Pinterest</div>
+          <input type="number" class="platform-input" id="p-pinterest" placeholder="£ spent" min="0" oninput="calcPlatforms()">
+          <div class="platform-pct" id="pct-pinterest">— of total</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-brand">SM<span>Pro</span></div>
+      <a href="https://socialmavenpro.co.uk" class="footer-link">socialmavenpro.co.uk</a>
+    </div>
+
+  </div>
+
+  <script>
+    function fmt(n) {
+      return '£' + Math.round(n).toLocaleString('en-GB');
+    }
+
+    function fmtDiff(n) {
+      const sign = n >= 0 ? '+' : '-';
+      return sign + '£' + Math.abs(Math.round(n)).toLocaleString('en-GB');
+    }
+
+    function calc() {
+      const budget = parseFloat(document.getElementById('budget').value) || 0;
+      const spent = parseFloat(document.getElementById('spent').value) || 0;
+      const daysTotal = parseFloat(document.getElementById('days-total').value) || 30;
+      const daysElapsed = parseFloat(document.getElementById('days-elapsed').value) || 0;
+
+      const dailyBudget = daysTotal > 0 ? budget / daysTotal : 0;
+      const idealSpent = dailyBudget * daysElapsed;
+      const diff = spent - idealSpent;
+      const pctSpent = budget > 0 ? (spent / budget) * 100 : 0;
+      const idealPct = budget > 0 ? (idealSpent / budget) * 100 : 0;
+      const daysRemaining = daysTotal - daysElapsed;
+      const budgetRemaining = budget - spent;
+      const projEOM = daysElapsed > 0 ? (spent / daysElapsed) * daysTotal : 0;
+      const reqDaily = daysRemaining > 0 ? budgetRemaining / daysRemaining : 0;
+      const diffPct = budget > 0 ? Math.abs(diff / budget) * 100 : 0;
+
+      // Bar
+      document.getElementById('bar-label-spent').textContent = 'Spent: ' + fmt(spent);
+      document.getElementById('bar-label-budget').textContent = 'Budget: ' + fmt(budget);
+      document.getElementById('bar-fill').style.width = Math.min(pctSpent, 100) + '%';
+      document.getElementById('bar-marker').style.left = Math.min(idealPct, 100) + '%';
+      document.getElementById('ideal-pct').textContent = Math.round(idealPct) + '%';
+      document.getElementById('actual-pct').textContent = Math.round(pctSpent) + '%';
+
+      // Colour the bar
+      const barFill = document.getElementById('bar-fill');
+      if (diff > 0 && diffPct > 5) {
+        barFill.style.background = 'var(--green)';
+      } else if (diff < 0 && diffPct > 5) {
+        barFill.style.background = 'var(--red)';
+      } else {
+        barFill.style.background = 'var(--orange)';
+      }
+
+      // Metrics
+      document.getElementById('daily-budget').textContent = fmt(dailyBudget);
+      document.getElementById('ideal-spent').textContent = fmt(idealSpent);
+
+      const ouEl = document.getElementById('over-under');
+      ouEl.textContent = fmtDiff(diff);
+      if (diff > 0 && diffPct > 5) {
+        ouEl.className = 'metric-value good';
+      } else if (diff < 0 && diffPct > 5) {
+        ouEl.className = 'metric-value bad';
+      } else {
+        ouEl.className = 'metric-value warn';
+      }
+
+      // Verdict
+      const verdictEl = document.getElementById('verdict');
+      const verdictText = document.getElementById('verdict-text');
+      if (diff > 0 && diffPct > 5) {
+        verdictEl.className = 'verdict ahead';
+        verdictText.textContent = 'Ahead of pace — spending faster than planned. Review daily caps if the budget needs to last the full month.';
+      } else if (diff < 0 && diffPct > 5) {
+        verdictEl.className = 'verdict behind';
+        verdictText.textContent = 'Behind pace — underspend detected. Increase daily budgets or broaden audiences to hit your monthly target.';
+      } else {
+        verdictEl.className = 'verdict on-track';
+        verdictText.textContent = 'On track — spend is within 5% of ideal pace. Keep monitoring daily.';
+      }
+
+      // Projections
+      document.getElementById('proj-eom').textContent = fmt(projEOM);
+      const remEl = document.getElementById('budget-remaining');
+      remEl.textContent = fmt(budgetRemaining);
+      remEl.style.color = budgetRemaining < 0 ? 'var(--red)' : 'var(--text-primary)';
+      document.getElementById('days-remaining').textContent = Math.max(0, Math.round(daysRemaining)) + ' days';
+      document.getElementById('req-daily').textContent = fmt(Math.max(0, reqDaily));
+
+      calcPlatforms();
+    }
+
+    function calcPlatforms() {
+      const spent = parseFloat(document.getElementById('spent').value) || 0;
+      const platforms = ['meta', 'tiktok', 'pinterest'];
+      let total = 0;
+      platforms.forEach(p => {
+        total += parseFloat(document.getElementById('p-' + p).value) || 0;
+      });
+      const base = total > 0 ? total : spent;
+      platforms.forEach(p => {
+        const val = parseFloat(document.getElementById('p-' + p).value) || 0;
+        const el = document.getElementById('pct-' + p);
+        if (val > 0 && base > 0) {
+          el.textContent = Math.round((val / base) * 100) + '% of total';
+        } else {
+          el.textContent = '— of total';
+        }
+      });
+    }
+
+    calc();
+  </script>
+</body>
+</html>

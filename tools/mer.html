@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MER Calculator — SMPro Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange: #ff4b2b;
+      --orange-dim: rgba(255,75,43,0.15);
+      --bg: #0E0E0E;
+      --surface: #161616;
+      --surface-2: #1E1E1E;
+      --surface-3: #262626;
+      --border: rgba(255,255,255,0.08);
+      --text-primary: #F0EDE6;
+      --text-secondary: #888580;
+      --text-muted: #555250;
+      --green: #3DB87A;
+      --green-dim: rgba(61,184,122,0.12);
+      --red: #E05252;
+      --red-dim: rgba(224,82,82,0.12);
+      --amber: #E0A830;
+      --amber-dim: rgba(224,168,48,0.12);
+    }
+    html { font-size: 16px; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; padding: 2rem 1rem 4rem; }
+    .page { max-width: 720px; margin: 0 auto; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
+    .brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.01em; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .brand span { color: var(--orange); }
+    .page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 28px; color: var(--text-primary); line-height: 1.1; }
+    .page-subtitle { font-size: 14px; color: var(--text-secondary); margin-top: 6px; font-weight: 300; }
+    .header-badge { font-size: 11px; font-weight: 500; color: var(--orange); background: var(--orange-dim); border: 0.5px solid rgba(255,75,43,0.3); border-radius: 20px; padding: 5px 12px; white-space: nowrap; margin-top: 4px; }
+    .section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+    .inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .input-group { display: flex; flex-direction: column; gap: 6px; }
+    .input-group label { font-size: 12px; color: var(--text-secondary); }
+    .input-group input { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; color: var(--text-primary); width: 100%; transition: border-color 0.15s; -moz-appearance: textfield; }
+    .input-group input::-webkit-outer-spin-button, .input-group input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .input-group input:focus { outline: none; border-color: var(--orange); background: var(--surface-3); }
+    .metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 1rem; }
+    .metric { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric-value { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text-primary); }
+    .metric-value.good { color: var(--green); }
+    .metric-value.warn { color: var(--amber); }
+    .metric-value.bad { color: var(--red); }
+    .verdict { border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.5; margin-bottom: 1rem; }
+    .verdict.on-track { background: var(--amber-dim); border: 0.5px solid rgba(224,168,48,0.25); color: var(--amber); }
+    .verdict.good { background: var(--green-dim); border: 0.5px solid rgba(61,184,122,0.25); color: var(--green); }
+    .verdict.bad { background: var(--red-dim); border: 0.5px solid rgba(224,82,82,0.25); color: var(--red); }
+    .verdict-icon { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; position: relative; top: -1px; }
+    .verdict.on-track .verdict-icon { background: var(--amber); }
+    .verdict.good .verdict-icon { background: var(--green); }
+    .verdict.bad .verdict-icon { background: var(--red); }
+    .proj-table { width: 100%; border-collapse: collapse; }
+    .proj-table tr { border-bottom: 0.5px solid var(--border); }
+    .proj-table tr:last-child { border-bottom: none; }
+    .proj-table td { padding: 9px 0; font-size: 13px; }
+    .proj-table td:first-child { color: var(--text-secondary); font-weight: 300; }
+    .proj-table td:last-child { text-align: right; font-weight: 500; }
+    .platform-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .platform-card { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .platform-name { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .platform-input { background: var(--surface-3); border: 0.5px solid var(--border); border-radius: 6px; padding: 7px 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-primary); width: 100%; -moz-appearance: textfield; transition: border-color 0.15s; }
+    .platform-input::-webkit-outer-spin-button, .platform-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .platform-input:focus { outline: none; border-color: var(--orange); }
+    .platform-mer { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+    .footer { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .footer-brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--text-primary); }
+    .footer-brand span { color: var(--orange); }
+    .footer-link { font-size: 12px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--orange); }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 1.5rem; transition: color 0.15s; }
+    .back-link:hover { color: var(--orange); }
+    @media (max-width: 520px) { .inputs-grid { grid-template-columns: 1fr 1fr; } .metrics-grid { grid-template-columns: 1fr 1fr; } .platform-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 12px; } .page-title { font-size: 22px; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .card { animation: fadeIn 0.3s ease both; }
+    .card:nth-child(1) { animation-delay: 0.05s; } .card:nth-child(2) { animation-delay: 0.1s; } .card:nth-child(3) { animation-delay: 0.15s; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <a href="/tools" class="back-link">← All tools</a>
+    <div class="header">
+      <div class="header-left">
+        <div class="brand">SM<span>Pro</span></div>
+        <h1 class="page-title">MER Calculator</h1>
+        <p class="page-subtitle">Calculate your blended Media Efficiency Ratio across all paid channels.</p>
+      </div>
+      <div class="header-badge">Paid Social Tool</div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Revenue & spend</div>
+      <div class="inputs-grid">
+        <div class="input-group">
+          <label>Total revenue (£)</label>
+          <input type="number" id="revenue" value="50000" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Total ad spend (£)</label>
+          <input type="number" id="total-spend" value="10000" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Target MER</label>
+          <input type="number" id="target-mer" value="4" min="0" step="0.1" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Gross margin (%)</label>
+          <input type="number" id="gross-margin" value="55" min="0" max="100" oninput="calc()">
+        </div>
+      </div>
+    </div>
+
+    <div id="verdict" class="verdict on-track">
+      <span class="verdict-icon"></span>
+      <span id="verdict-text">Calculating...</span>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-label">Blended MER</div>
+        <div class="metric-value" id="mer">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">vs Target</div>
+        <div class="metric-value" id="vs-target">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Ad spend %</div>
+        <div class="metric-value" id="spend-pct">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Profitability breakdown</div>
+      <table class="proj-table">
+        <tr><td>Gross profit</td><td id="gross-profit">—</td></tr>
+        <tr><td>Ad spend</td><td id="ad-spend-row">—</td></tr>
+        <tr><td>Contribution after ad spend</td><td id="contribution">—</td></tr>
+        <tr><td>Contribution margin</td><td id="contribution-margin">—</td></tr>
+        <tr><td>Break-even MER (at current margin)</td><td id="breakeven-mer">—</td></tr>
+        <tr><td>Spend headroom to break-even</td><td id="headroom">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Platform breakdown (optional)</div>
+      <div class="platform-grid">
+        <div class="platform-card">
+          <div class="platform-name">Meta</div>
+          <input type="number" class="platform-input" id="p-meta-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-meta-rev" placeholder="£ revenue" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-mer" id="mer-meta">MER —</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">TikTok</div>
+          <input type="number" class="platform-input" id="p-tiktok-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-tiktok-rev" placeholder="£ revenue" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-mer" id="mer-tiktok">MER —</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">Pinterest</div>
+          <input type="number" class="platform-input" id="p-pinterest-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-pinterest-rev" placeholder="£ revenue" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-mer" id="mer-pinterest">MER —</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-brand">SM<span>Pro</span></div>
+      <a href="https://socialmavenpro.co.uk" class="footer-link">socialmavenpro.co.uk</a>
+    </div>
+  </div>
+
+  <script>
+    function fmt(n) { return '£' + Math.round(n).toLocaleString('en-GB'); }
+    function fmtX(n) { return n.toFixed(2) + '×'; }
+    function fmtPct(n) { return Math.round(n) + '%'; }
+
+    function calc() {
+      const revenue = parseFloat(document.getElementById('revenue').value) || 0;
+      const spend = parseFloat(document.getElementById('total-spend').value) || 0;
+      const targetMer = parseFloat(document.getElementById('target-mer').value) || 0;
+      const grossMarginPct = parseFloat(document.getElementById('gross-margin').value) || 0;
+
+      const mer = spend > 0 ? revenue / spend : 0;
+      const spendPct = revenue > 0 ? (spend / revenue) * 100 : 0;
+      const grossProfit = revenue * (grossMarginPct / 100);
+      const contribution = grossProfit - spend;
+      const contributionMargin = revenue > 0 ? (contribution / revenue) * 100 : 0;
+      const breakevenMer = grossMarginPct > 0 ? 100 / grossMarginPct : 0;
+      const headroom = spend > 0 ? (grossProfit - spend) : 0;
+
+      document.getElementById('mer').textContent = fmtX(mer);
+      document.getElementById('vs-target').textContent = targetMer > 0 ? (mer >= targetMer ? '+' : '') + (mer - targetMer).toFixed(2) + '×' : '—';
+      document.getElementById('spend-pct').textContent = fmtPct(spendPct);
+      document.getElementById('gross-profit').textContent = fmt(grossProfit);
+      document.getElementById('ad-spend-row').textContent = fmt(spend);
+      document.getElementById('contribution').textContent = fmt(contribution);
+      document.getElementById('contribution-margin').textContent = fmtPct(contributionMargin);
+      document.getElementById('breakeven-mer').textContent = fmtX(breakevenMer);
+      document.getElementById('headroom').textContent = fmt(headroom);
+
+      const merEl = document.getElementById('mer');
+      const vsEl = document.getElementById('vs-target');
+      const verdictEl = document.getElementById('verdict');
+      const verdictText = document.getElementById('verdict-text');
+
+      if (mer >= targetMer && targetMer > 0) {
+        merEl.className = 'metric-value good';
+        vsEl.className = 'metric-value good';
+        verdictEl.className = 'verdict good';
+        verdictText.textContent = 'Above target MER — your blended efficiency is strong. Monitor contribution margin to ensure profitability holds as you scale.';
+      } else if (mer >= breakevenMer) {
+        merEl.className = 'metric-value warn';
+        vsEl.className = 'metric-value warn';
+        verdictEl.className = 'verdict on-track';
+        verdictText.textContent = 'Below target but above break-even MER — you\'re profitable but leaving efficiency on the table. Review channel mix and creative performance.';
+      } else {
+        merEl.className = 'metric-value bad';
+        vsEl.className = 'metric-value bad';
+        verdictEl.className = 'verdict bad';
+        verdictText.textContent = 'Below break-even MER — ad spend is exceeding gross profit. Reduce spend, improve margin, or restructure channel allocation immediately.';
+      }
+
+      const headroomEl = document.getElementById('headroom');
+      headroomEl.style.color = headroom >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+
+    function calcPlatforms() {
+      ['meta', 'tiktok', 'pinterest'].forEach(p => {
+        const spend = parseFloat(document.getElementById('p-' + p + '-spend').value) || 0;
+        const rev = parseFloat(document.getElementById('p-' + p + '-rev').value) || 0;
+        const el = document.getElementById('mer-' + p);
+        el.textContent = spend > 0 && rev > 0 ? 'MER ' + (rev / spend).toFixed(2) + '×' : 'MER —';
+      });
+    }
+
+    calc();
+  </script>
+</body>
+</html>

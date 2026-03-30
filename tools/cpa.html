@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPA Calculator — SMPro Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange: #ff4b2b;
+      --orange-dim: rgba(255,75,43,0.15);
+      --bg: #0E0E0E;
+      --surface: #161616;
+      --surface-2: #1E1E1E;
+      --surface-3: #262626;
+      --border: rgba(255,255,255,0.08);
+      --text-primary: #F0EDE6;
+      --text-secondary: #888580;
+      --text-muted: #555250;
+      --green: #3DB87A;
+      --green-dim: rgba(61,184,122,0.12);
+      --red: #E05252;
+      --red-dim: rgba(224,82,82,0.12);
+      --amber: #E0A830;
+      --amber-dim: rgba(224,168,48,0.12);
+    }
+    html { font-size: 16px; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; padding: 2rem 1rem 4rem; }
+    .page { max-width: 720px; margin: 0 auto; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
+    .brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.01em; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .brand span { color: var(--orange); }
+    .page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 28px; color: var(--text-primary); line-height: 1.1; }
+    .page-subtitle { font-size: 14px; color: var(--text-secondary); margin-top: 6px; font-weight: 300; }
+    .header-badge { font-size: 11px; font-weight: 500; color: var(--orange); background: var(--orange-dim); border: 0.5px solid rgba(255,75,43,0.3); border-radius: 20px; padding: 5px 12px; white-space: nowrap; margin-top: 4px; }
+    .section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+    .inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .input-group { display: flex; flex-direction: column; gap: 6px; }
+    .input-group label { font-size: 12px; color: var(--text-secondary); }
+    .input-group input { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; color: var(--text-primary); width: 100%; transition: border-color 0.15s; -moz-appearance: textfield; }
+    .input-group input::-webkit-outer-spin-button, .input-group input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .input-group input:focus { outline: none; border-color: var(--orange); background: var(--surface-3); }
+    .metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 1rem; }
+    .metric { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric-value { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text-primary); }
+    .metric-value.good { color: var(--green); }
+    .metric-value.warn { color: var(--amber); }
+    .metric-value.bad { color: var(--red); }
+    .verdict { border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.5; margin-bottom: 1rem; }
+    .verdict.on-track { background: var(--amber-dim); border: 0.5px solid rgba(224,168,48,0.25); color: var(--amber); }
+    .verdict.good { background: var(--green-dim); border: 0.5px solid rgba(61,184,122,0.25); color: var(--green); }
+    .verdict.bad { background: var(--red-dim); border: 0.5px solid rgba(224,82,82,0.25); color: var(--red); }
+    .verdict-icon { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; position: relative; top: -1px; }
+    .verdict.on-track .verdict-icon { background: var(--amber); }
+    .verdict.good .verdict-icon { background: var(--green); }
+    .verdict.bad .verdict-icon { background: var(--red); }
+    .proj-table { width: 100%; border-collapse: collapse; }
+    .proj-table tr { border-bottom: 0.5px solid var(--border); }
+    .proj-table tr:last-child { border-bottom: none; }
+    .proj-table td { padding: 9px 0; font-size: 13px; }
+    .proj-table td:first-child { color: var(--text-secondary); font-weight: 300; }
+    .proj-table td:last-child { text-align: right; font-weight: 500; }
+    .platform-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .platform-card { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .platform-name { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .platform-input { background: var(--surface-3); border: 0.5px solid var(--border); border-radius: 6px; padding: 7px 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-primary); width: 100%; -moz-appearance: textfield; transition: border-color 0.15s; }
+    .platform-input::-webkit-outer-spin-button, .platform-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .platform-input:focus { outline: none; border-color: var(--orange); }
+    .platform-stat { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+    .footer { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .footer-brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--text-primary); }
+    .footer-brand span { color: var(--orange); }
+    .footer-link { font-size: 12px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--orange); }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 1.5rem; transition: color 0.15s; }
+    .back-link:hover { color: var(--orange); }
+    @media (max-width: 520px) { .inputs-grid { grid-template-columns: 1fr 1fr; } .metrics-grid { grid-template-columns: 1fr 1fr; } .platform-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 12px; } .page-title { font-size: 22px; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .card { animation: fadeIn 0.3s ease both; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <a href="/tools" class="back-link">← All tools</a>
+    <div class="header">
+      <div class="header-left">
+        <div class="brand">SM<span>Pro</span></div>
+        <h1 class="page-title">CPA Calculator</h1>
+        <p class="page-subtitle">Calculate cost per acquisition and assess profitability against your LTV and margins.</p>
+      </div>
+      <div class="header-badge">Paid Social Tool</div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Campaign inputs</div>
+      <div class="inputs-grid">
+        <div class="input-group">
+          <label>Total ad spend (£)</label>
+          <input type="number" id="spend" value="5000" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Total conversions</label>
+          <input type="number" id="conversions" value="120" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Average order value (£)</label>
+          <input type="number" id="aov" value="85" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Gross margin (%)</label>
+          <input type="number" id="margin" value="55" min="0" max="100" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Target CPA (£)</label>
+          <input type="number" id="target-cpa" value="35" min="0" oninput="calc()">
+        </div>
+        <div class="input-group">
+          <label>Customer LTV (£) — optional</label>
+          <input type="number" id="ltv" value="" min="0" placeholder="e.g. 200" oninput="calc()">
+        </div>
+      </div>
+    </div>
+
+    <div id="verdict" class="verdict on-track">
+      <span class="verdict-icon"></span>
+      <span id="verdict-text">Calculating...</span>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-label">CPA</div>
+        <div class="metric-value" id="cpa">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">vs Target</div>
+        <div class="metric-value" id="vs-target">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">ROAS</div>
+        <div class="metric-value" id="roas">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Profitability per acquisition</div>
+      <table class="proj-table">
+        <tr><td>Revenue per conversion (AOV)</td><td id="aov-row">—</td></tr>
+        <tr><td>Gross profit per conversion</td><td id="gross-per-conv">—</td></tr>
+        <tr><td>CPA</td><td id="cpa-row">—</td></tr>
+        <tr><td>Profit per acquisition</td><td id="profit-per-acq">—</td></tr>
+        <tr><td>Max profitable CPA (at margin)</td><td id="max-cpa">—</td></tr>
+        <tr><td id="ltv-label" style="display:none">Profit per acq (LTV-adjusted)</td><td id="ltv-profit" style="display:none">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Platform CPA breakdown (optional)</div>
+      <div class="platform-grid">
+        <div class="platform-card">
+          <div class="platform-name">Meta</div>
+          <input type="number" class="platform-input" id="p-meta-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-meta-conv" placeholder="Conversions" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-stat" id="cpa-meta">CPA —</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">TikTok</div>
+          <input type="number" class="platform-input" id="p-tiktok-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-tiktok-conv" placeholder="Conversions" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-stat" id="cpa-tiktok">CPA —</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">Pinterest</div>
+          <input type="number" class="platform-input" id="p-pinterest-spend" placeholder="£ spend" min="0" oninput="calcPlatforms()">
+          <input type="number" class="platform-input" id="p-pinterest-conv" placeholder="Conversions" min="0" style="margin-top:6px;" oninput="calcPlatforms()">
+          <div class="platform-stat" id="cpa-pinterest">CPA —</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-brand">SM<span>Pro</span></div>
+      <a href="https://socialmavenpro.co.uk" class="footer-link">socialmavenpro.co.uk</a>
+    </div>
+  </div>
+
+  <script>
+    function fmt(n) { return '£' + Math.abs(Math.round(n)).toLocaleString('en-GB'); }
+    function fmtSigned(n) { return (n >= 0 ? '+£' : '-£') + Math.abs(Math.round(n)).toLocaleString('en-GB'); }
+
+    function calc() {
+      const spend = parseFloat(document.getElementById('spend').value) || 0;
+      const conversions = parseFloat(document.getElementById('conversions').value) || 0;
+      const aov = parseFloat(document.getElementById('aov').value) || 0;
+      const marginPct = parseFloat(document.getElementById('margin').value) || 0;
+      const targetCpa = parseFloat(document.getElementById('target-cpa').value) || 0;
+      const ltv = parseFloat(document.getElementById('ltv').value) || 0;
+
+      const cpa = conversions > 0 ? spend / conversions : 0;
+      const totalRevenue = conversions * aov;
+      const roas = spend > 0 ? totalRevenue / spend : 0;
+      const grossPerConv = aov * (marginPct / 100);
+      const maxCpa = grossPerConv;
+      const profitPerAcq = grossPerConv - cpa;
+      const ltvProfit = ltv > 0 ? (ltv * (marginPct / 100)) - cpa : 0;
+
+      document.getElementById('cpa').textContent = fmt(cpa);
+      document.getElementById('roas').textContent = roas.toFixed(2) + '×';
+      document.getElementById('aov-row').textContent = fmt(aov);
+      document.getElementById('gross-per-conv').textContent = fmt(grossPerConv);
+      document.getElementById('cpa-row').textContent = fmt(cpa);
+      document.getElementById('max-cpa').textContent = fmt(maxCpa);
+
+      const profEl = document.getElementById('profit-per-acq');
+      profEl.textContent = fmtSigned(profitPerAcq);
+      profEl.style.color = profitPerAcq >= 0 ? 'var(--green)' : 'var(--red)';
+
+      if (ltv > 0) {
+        document.getElementById('ltv-label').style.display = '';
+        document.getElementById('ltv-profit').style.display = '';
+        const ltvEl = document.getElementById('ltv-profit');
+        ltvEl.textContent = fmtSigned(ltvProfit);
+        ltvEl.style.color = ltvProfit >= 0 ? 'var(--green)' : 'var(--red)';
+      } else {
+        document.getElementById('ltv-label').style.display = 'none';
+        document.getElementById('ltv-profit').style.display = 'none';
+      }
+
+      const vsTarget = targetCpa > 0 ? cpa - targetCpa : null;
+      const vsEl = document.getElementById('vs-target');
+      if (vsTarget !== null) {
+        vsEl.textContent = (vsTarget <= 0 ? '-£' : '+£') + Math.abs(Math.round(vsTarget)).toLocaleString('en-GB');
+        vsEl.className = vsTarget <= 0 ? 'metric-value good' : 'metric-value bad';
+      } else {
+        vsEl.textContent = '—';
+        vsEl.className = 'metric-value';
+      }
+
+      const verdictEl = document.getElementById('verdict');
+      const verdictText = document.getElementById('verdict-text');
+      const cpaEl = document.getElementById('cpa');
+
+      if (cpa === 0) {
+        verdictEl.className = 'verdict on-track';
+        verdictText.textContent = 'Enter your spend and conversions to calculate CPA.';
+        return;
+      }
+
+      if (cpa <= maxCpa * 0.7) {
+        cpaEl.className = 'metric-value good';
+        verdictEl.className = 'verdict good';
+        verdictText.textContent = 'Strong CPA — well within your profitable range. You may have headroom to scale spend while maintaining margin.';
+      } else if (cpa <= maxCpa) {
+        cpaEl.className = 'metric-value warn';
+        verdictEl.className = 'verdict on-track';
+        verdictText.textContent = 'CPA is within range but close to break-even. Watch closely as you scale — small increases in CPA will erode margin quickly.';
+      } else {
+        cpaEl.className = 'metric-value bad';
+        verdictEl.className = 'verdict bad';
+        verdictText.textContent = 'CPA exceeds gross profit per order — you\'re acquiring customers at a loss. Improve conversion rate, reduce spend, or increase AOV.';
+      }
+    }
+
+    function calcPlatforms() {
+      ['meta', 'tiktok', 'pinterest'].forEach(p => {
+        const spend = parseFloat(document.getElementById('p-' + p + '-spend').value) || 0;
+        const conv = parseFloat(document.getElementById('p-' + p + '-conv').value) || 0;
+        const el = document.getElementById('cpa-' + p);
+        el.textContent = spend > 0 && conv > 0 ? 'CPA £' + Math.round(spend / conv).toLocaleString('en-GB') : 'CPA —';
+      });
+    }
+
+    calc();
+  </script>
+</body>
+</html>

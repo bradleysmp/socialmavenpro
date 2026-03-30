@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free Tools — SMPro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange: #ff4b2b;
+      --orange-dim: rgba(255,75,43,0.15);
+      --bg: #0E0E0E;
+      --surface: #161616;
+      --surface-2: #1E1E1E;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.15);
+      --text-primary: #F0EDE6;
+      --text-secondary: #888580;
+      --text-muted: #555250;
+    }
+    html { font-size: 16px; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; padding: 2rem 1rem 4rem; }
+    .page { max-width: 720px; margin: 0 auto; }
+    .header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
+    .brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.01em; color: var(--text-primary); margin-bottom: 1rem; text-decoration: none; display: inline-block; }
+    .brand span { color: var(--orange); }
+    .page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 32px; color: var(--text-primary); line-height: 1.1; margin-bottom: 8px; }
+    .page-subtitle { font-size: 15px; color: var(--text-secondary); font-weight: 300; max-width: 480px; line-height: 1.6; }
+    .tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tool-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 1.5rem; text-decoration: none; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; }
+    .tool-card:hover { border-color: var(--border-hover); background: var(--surface-2); }
+    .tool-card:hover .tool-arrow { color: var(--orange); }
+    .tool-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--orange-dim); border: 0.5px solid rgba(255,75,43,0.3); display: flex; align-items: center; justify-content: center; }
+    .tool-icon svg { width: 18px; height: 18px; stroke: var(--orange); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .tool-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 17px; color: var(--text-primary); }
+    .tool-desc { font-size: 13px; color: var(--text-secondary); font-weight: 300; line-height: 1.5; flex: 1; }
+    .tool-footer { display: flex; align-items: center; justify-content: space-between; }
+    .tool-tag { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+    .tool-arrow { font-size: 16px; color: var(--text-muted); transition: color 0.2s; }
+    .section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+    .cta-card { background: var(--orange-dim); border: 0.5px solid rgba(255,75,43,0.25); border-radius: 14px; padding: 1.5rem; margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .cta-text h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 17px; color: var(--text-primary); margin-bottom: 4px; }
+    .cta-text p { font-size: 13px; color: var(--text-secondary); font-weight: 300; }
+    .cta-btn { background: var(--orange); color: #fff; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 13px; padding: 10px 18px; border-radius: 8px; text-decoration: none; white-space: nowrap; transition: opacity 0.15s; }
+    .cta-btn:hover { opacity: 0.88; }
+    .footer { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .footer-brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--text-primary); }
+    .footer-brand span { color: var(--orange); }
+    .footer-link { font-size: 12px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--orange); }
+    @media (max-width: 520px) { .tools-grid { grid-template-columns: 1fr; } .cta-card { flex-direction: column; align-items: flex-start; } .page-title { font-size: 26px; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .tool-card { animation: fadeIn 0.35s ease both; }
+    .tool-card:nth-child(1) { animation-delay: 0.05s; }
+    .tool-card:nth-child(2) { animation-delay: 0.1s; }
+    .tool-card:nth-child(3) { animation-delay: 0.15s; }
+    .tool-card:nth-child(4) { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <a href="https://socialmavenpro.co.uk" class="brand">SM<span>Pro</span></a>
+      <h1 class="page-title">Free paid social tools.</h1>
+      <p class="page-subtitle">Quick calculators for DTC brands and paid social managers. No email required, no fluff.</p>
+    </div>
+
+    <div class="section-label">Calculators</div>
+    <div class="tools-grid">
+
+      <a href="/tools/pacing" class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-7"/></svg>
+        </div>
+        <div class="tool-name">Budget Pacing</div>
+        <p class="tool-desc">Track spend vs ideal pace in real time. Catch underspend and overspend before it becomes a problem.</p>
+        <div class="tool-footer">
+          <span class="tool-tag">Spend</span>
+          <span class="tool-arrow">→</span>
+        </div>
+      </a>
+
+      <a href="/tools/mer" class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        </div>
+        <div class="tool-name">MER Calculator</div>
+        <p class="tool-desc">Calculate your blended Media Efficiency Ratio and see where you stand vs break-even and target.</p>
+        <div class="tool-footer">
+          <span class="tool-tag">Efficiency</span>
+          <span class="tool-arrow">→</span>
+        </div>
+      </a>
+
+      <a href="/tools/cpa" class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div class="tool-name">CPA Calculator</div>
+        <p class="tool-desc">Find your cost per acquisition, max profitable CPA, and profit per conversion across platforms.</p>
+        <div class="tool-footer">
+          <span class="tool-tag">Acquisition</span>
+          <span class="tool-arrow">→</span>
+        </div>
+      </a>
+
+      <a href="/tools/breakeven" class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M12 2v20"/><path d="M17 7l-5 5-5-5"/></svg>
+        </div>
+        <div class="tool-name">Break-even ROAS</div>
+        <p class="tool-desc">Enter your cost structure and instantly see the ROAS you need to cover costs and generate profit.</p>
+        <div class="tool-footer">
+          <span class="tool-tag">Profitability</span>
+          <span class="tool-arrow">→</span>
+        </div>
+      </a>
+
+    </div>
+
+    <div class="cta-card">
+      <div class="cta-text">
+        <h3>Want these numbers fixed properly?</h3>
+        <p>Book a free 30-minute call to review your ad account.</p>
+      </div>
+      <a href="https://calendly.com/bradley-socialmavenpro/30min" class="cta-btn">Book a call →</a>
+    </div>
+
+    <div class="footer">
+      <div class="footer-brand">SM<span>Pro</span></div>
+      <a href="https://socialmavenpro.co.uk" class="footer-link">socialmavenpro.co.uk</a>
+    </div>
+  </div>
+</body>
+</html>
