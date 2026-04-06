@@ -83,6 +83,17 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .card { animation: fadeIn 0.3s ease both; }
     .card:nth-child(1) { animation-delay: 0.05s; } .card:nth-child(2) { animation-delay: 0.1s; } .card:nth-child(3) { animation-delay: 0.15s; }
+
+    .audit-card { background: var(--orange-dim); border: 0.5px solid rgba(255,75,43,0.25); border-radius: 14px; padding: 1.5rem; margin-top: 2rem; }
+    .audit-card h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; color: var(--text-primary); margin-bottom: 6px; }
+    .audit-card p { font-size: 13px; color: var(--text-secondary); font-weight: 300; line-height: 1.6; margin-bottom: 1rem; max-width: 480px; }
+    .audit-form { display: flex; gap: 8px; flex-wrap: wrap; }
+    .audit-form input[type="email"] { flex: 1; min-width: 220px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text-primary); transition: border-color 0.15s; }
+    .audit-form input[type="email"]::placeholder { color: var(--text-muted); }
+    .audit-form input[type="email"]:focus { outline: none; border-color: var(--orange); }
+    .audit-form button { background: var(--orange); color: #fff; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 13px; padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+    .audit-form button:hover { opacity: 0.88; }
+    .audit-success { display: none; font-size: 13px; color: var(--green, #3DB87A); margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -175,6 +186,19 @@
       </div>
     </div>
 
+
+    <div class="audit-card">
+      <h3>Get a free paid social audit</h3>
+      <p>I'll review your setup across Meta, TikTok or Pinterest and tell you exactly where you're leaving money on the table. No pitch, just honest feedback.</p>
+      <form name="audit" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="audit-form" onsubmit="handleAuditSubmit(event)">
+        <input type="hidden" name="form-name" value="audit">
+        <input type="hidden" name="bot-field">
+        <input type="email" name="email" placeholder="Your email address" required>
+        <button type="submit">Get My Free Audit →</button>
+      </form>
+      <div class="audit-success" id="audit-success">✓ Got it — I'll be in touch shortly.</div>
+    </div>
+
     <div class="footer">
       <div class="footer-brand">SM<span>Pro</span></div>
       <a href="https://socialmavenpro.co.uk" class="footer-link">socialmavenpro.co.uk</a>
@@ -246,6 +270,17 @@
     }
 
     calc();
+  </script>
+
+  <script>
+    function handleAuditSubmit(e) {
+      e.preventDefault();
+      const form = e.target;
+      const data = new FormData(form);
+      fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data).toString() })
+        .then(() => { form.style.display = 'none'; document.getElementById('audit-success').style.display = 'block'; })
+        .catch(() => { form.submit(); });
+    }
   </script>
 </body>
 </html>
