@@ -18,21 +18,21 @@ exports.handler = async function(event) {
   try {
     const { api_key, connector, date_preset, fields, account_id } = JSON.parse(event.body);
 
-    const fieldList = fields.split(',').map(f => f.trim());
+    // Windsor API format: /connector?api_key=...&fields=date,spend,...&account_id=...
     const params = new URLSearchParams();
     params.append('api_key', api_key);
-    params.append('connector', connector);
+    params.append('fields', fields); // comma-separated string e.g. "date,spend,impressions"
     params.append('account_id', account_id);
     if (date_preset) params.append('date_preset', date_preset);
-    fieldList.forEach(f => params.append('fields[]', f));
 
-    const url = `https://connectors.windsor.ai/data?${params}`;
+    const url = `https://connectors.windsor.ai/${connector}?${params}`;
     const response = await fetch(url);
 
     if (!response.ok) {
       const text = await response.text();
       return {
         statusCode: response.status,
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: `Windsor returned ${response.status}`, detail: text }),
       };
     }
