@@ -16,17 +16,20 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { api_key, connector, date_preset, fields, account_id } = JSON.parse(event.body);
+    const { api_key, connector, date_preset, fields, account_id, options } = JSON.parse(event.body);
 
-    // Windsor REST API format per documentation
     const params = new URLSearchParams();
     params.append('api_key', api_key);
     params.append('fields', fields);
     if (date_preset) params.append('date_preset', date_preset);
 
-    // Filter by account_id using Windsor filter syntax
     if (account_id) {
       params.append('filter', JSON.stringify([['account_id', 'eq', account_id]]));
+    }
+
+    // Forward connector-specific options e.g. attribution_window, conversion_report_time
+    if (options && typeof options === 'object') {
+      Object.entries(options).forEach(([k, v]) => params.append(k, v));
     }
 
     const url = `https://connectors.windsor.ai/${connector}?${params}`;
