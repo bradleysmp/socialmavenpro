@@ -46,7 +46,23 @@
     position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
     background: var(--bg2); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 100; overflow-y: auto;
+    transition: width 0.25s ease, transform 0.25s ease;
+    overflow-x: hidden;
   }
+  .sidebar.collapsed { width: 0; border-right: none; }
+  .sidebar.collapsed * { opacity: 0; pointer-events: none; }
+  .sidebar-toggle {
+    position: fixed; left: 220px; top: 14px; z-index: 200;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--bg3); border: 1px solid var(--border2);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: left 0.25s ease, background 0.15s;
+    color: var(--text2);
+  }
+  .sidebar-toggle:hover { background: var(--bg4); color: var(--text); }
+  .sidebar-toggle.collapsed { left: 0px; }
+  .sidebar-toggle svg { transition: transform 0.25s ease; }
+  .sidebar-toggle.collapsed svg { transform: rotate(180deg); }
   .sidebar-logo {
     padding: 22px 20px 18px;
     border-bottom: 1px solid var(--border);
@@ -90,7 +106,8 @@
   .api-label { font-size: 10px; color: var(--text3); margin-bottom: 5px; }
 
   /* MAIN */
-  .main { margin-left: 220px; min-height: 100vh; }
+  .main { margin-left: 220px; min-height: 100vh; transition: margin-left 0.25s ease; }
+  .main.expanded { margin-left: 0; }
 
   /* TOP BAR */
   .topbar {
@@ -226,8 +243,15 @@
 </head>
 <body>
 
+<!-- SIDEBAR TOGGLE -->
+<button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</button>
+
 <!-- SIDEBAR -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div class="sidebar-logo-text">SM<span>Pro</span></div>
     <div class="sidebar-logo-sub">Paid Social · Client Dashboard</div>
@@ -324,6 +348,15 @@ let state = {
 if (state.apiKey) document.getElementById('api-key-input').value = state.apiKey;
 
 // ─── INIT ──────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const main = document.querySelector('.main');
+  const toggle = document.getElementById('sidebar-toggle');
+  sidebar.classList.toggle('collapsed');
+  main.classList.toggle('expanded');
+  toggle.classList.toggle('collapsed');
+}
+
 function init() {
   const list = document.getElementById('client-list');
   list.innerHTML = CLIENTS.facebook.map(c => `
