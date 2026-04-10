@@ -333,8 +333,6 @@ const CLIENTS = {
   }
 };
 
-const DEFAULT_BE = { cogs: 0.40, returns: 0.08 };
-
 // ─── STATE ─────────────────────────────────────────────────
 let state = {
   apiKey: localStorage.getItem('windsor_api_key') || '',
@@ -454,12 +452,11 @@ async function loadData() {
     }
 
     const fields = connector === 'facebook'
-      ? ['date','spend','impressions','clicks','cpm','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','website_purchase_roas_offsite_conversion_fb_pixel_purchase']
-      : ['date','spend','impressions','clicks','cpm','conversions','revenue'];
+      ? ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
+      : ['date','spend','impressions','clicks','conversions','revenue'];
 
     const rows = await fetchWindsor(connector, accountId, fields, state.period);
 
-    // Also fetch campaign breakdown
     const campFields = connector === 'facebook'
       ? ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
       : ['campaign','spend','impressions','clicks','conversions','revenue'];
@@ -473,11 +470,10 @@ async function loadData() {
 
 // ─── RENDER ────────────────────────────────────────────────
 function renderDashboard(rows, campRows, connector) {
-  // Filter active days
   const active = rows.filter(r => parseFloat(r.spend||0) > 0);
   if (!active.length) { showError('No data found for this period.'); return; }
 
-  // Aggregate
+  // All metrics sourced directly from Windsor — no estimations
   const totalSpend = sum(active, 'spend');
   const totalRev = connector === 'facebook'
     ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase')
@@ -487,19 +483,16 @@ function renderDashboard(rows, campRows, connector) {
     : sum(active, 'conversions');
   const totalImpressions = sum(active, 'impressions');
   const totalClicks = sum(active, 'clicks');
+  const totalReach = sum(active, 'reach');
 
+  // Derived — mathematically exact from the above
   const roas = totalRev / totalSpend;
   const cpa = totalOrders > 0 ? totalSpend / totalOrders : 0;
   const aov = totalOrders > 0 ? totalRev / totalOrders : 0;
-  const ctr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0;
+  const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0;
   const avgCpm = totalImpressions > 0 ? (totalSpend / totalImpressions * 1000) : 0;
+  const avgFreq = totalReach > 0 ? totalImpressions / totalReach : 0;
 
-  const beROAS = 1 / (1 - DEFAULT_BE.cogs - DEFAULT_BE.returns);
-  const grossMargin = totalRev * (1 - DEFAULT_BE.cogs - DEFAULT_BE.returns);
-  const contribMargin = grossMargin - totalSpend;
-  const contribPct = totalRev > 0 ? contribMargin / totalRev * 100 : 0;
-
-  // Charts data
   const sorted = [...active].sort((a,b)=>a.date.localeCompare(b.date));
   const labels = sorted.map(r => formatDate(r.date));
   const spendData = sorted.map(r => +parseFloat(r.spend||0).toFixed(2));
@@ -510,23 +503,20 @@ function renderDashboard(rows, campRows, connector) {
     return s > 0 ? +(rv/s).toFixed(2) : null;
   });
 
-  // Campaigns
   const camps = aggregateCampaigns(campRows, connector);
-
-  // Insights
-  const insights = buildInsights(totalSpend, totalRev, totalOrders, roas, beROAS, contribMargin, contribPct, sorted, connector, roasData);
+  const insights = buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders);
 
   const html = `<div class="fade-in">
-    <!-- METRICS -->
+    <!-- METRICS — all direct from Windsor, no estimates -->
     <div class="metrics-grid">
-      ${metricCard('Ad Spend', fmt(totalSpend), '', '')}
-      ${metricCard('Revenue', fmt(totalRev), roasPillHTML(roas, beROAS), '')}
-      ${metricCard('ROAS', roas.toFixed(2)+'x', `BE: ${beROAS.toFixed(2)}x`, roasColor(roas,beROAS))}
-      ${metricCard('Contrib. Margin', fmt(Math.abs(contribMargin)), `${contribPct.toFixed(1)}% of rev`, contribMargin > 0 ? 'var(--green)' : 'var(--red)')}
-      ${metricCard('Orders', Math.round(totalOrders).toLocaleString(), `AOV ${fmt(aov)}`, '')}
-      ${metricCard('CPA', fmt(cpa), `CTR ${ctr.toFixed(2)}%`, '')}
-      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impr`, '')}
-      ${metricCard('Total Spend Days', active.length+'d', `${Math.round(totalSpend/active.length)}/day avg`, '')}
+      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
+      ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '')}
+      ${metricCard('ROAS', roas.toFixed(2)+'x', 'Meta attributed', roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)')}
+      ${metricCard('CPA', fmt(cpa), `AOV ${fmt(aov)}`, '')}
+      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '')}
+      ${metricCard('CTR', ctr.toFixed(2)+'%', `${(totalClicks).toLocaleString()} clicks`, '')}
+      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '')}
+      ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '')}
     </div>
 
     <!-- CHARTS -->
@@ -543,19 +533,7 @@ function renderDashboard(rows, campRows, connector) {
       </div>
       <div class="chart-card">
         <div class="chart-header"><div class="chart-title">Daily ROAS</div></div>
-        <div class="be-section">
-          <div class="be-row">
-            <div class="be-lbl">Current ROAS</div>
-            <div class="be-track"><div class="be-fill" style="width:${Math.min(roas/(beROAS*1.5)*100,100).toFixed(1)}%;background:${roasColor(roas,beROAS)}"></div></div>
-            <div class="be-val" style="color:${roasColor(roas,beROAS)}">${roas.toFixed(2)}x</div>
-          </div>
-          <div class="be-row">
-            <div class="be-lbl">Break-even</div>
-            <div class="be-track"><div class="be-fill" style="width:${(1/1.5*100).toFixed(1)}%;background:var(--text3)"></div></div>
-            <div class="be-val" style="color:var(--text3)">${beROAS.toFixed(2)}x</div>
-          </div>
-        </div>
-        <div style="position:relative;width:100%;height:160px;"><canvas id="chart-roas"></canvas></div>
+        <div style="position:relative;width:100%;height:220px;"><canvas id="chart-roas"></canvas></div>
       </div>
     </div>
 
@@ -583,22 +561,26 @@ function renderDashboard(rows, campRows, connector) {
               <th>Spend</th>
               <th>Revenue</th>
               <th>ROAS</th>
-              <th>Orders</th>
+              <th>Purchases</th>
               <th>CPA</th>
-              <th>Impr.</th>
+              <th>CPM</th>
+              <th>CTR</th>
             </tr>
           </thead>
           <tbody>
             ${camps.slice(0,15).map(c=>{
-              const cr = c.rev/c.spend;
+              const cr = c.spend > 0 ? c.rev/c.spend : 0;
+              const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
+              const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
               return `<tr>
-                <td title="${c.name}">${truncate(c.name,40)}</td>
+                <td title="${c.name}">${truncate(c.name,38)}</td>
                 <td>${fmt(c.spend)}</td>
                 <td>${fmt(c.rev)}</td>
-                <td class="roas-cell" style="color:${roasColor(cr,beROAS)}">${cr.toFixed(2)}x</td>
+                <td class="roas-cell" style="color:${cr>=2?'var(--green)':cr>=1?'var(--amber)':'var(--red)'}">${cr.toFixed(2)}x</td>
                 <td>${Math.round(c.orders)}</td>
                 <td>${c.orders>0?fmt(c.spend/c.orders):'-'}</td>
-                <td>${(c.impressions/1000).toFixed(0)}k</td>
+                <td>£${ccpm.toFixed(2)}</td>
+                <td>${cctr.toFixed(2)}%</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -608,11 +590,9 @@ function renderDashboard(rows, campRows, connector) {
   </div>`;
 
   document.getElementById('content').innerHTML = html;
-
-  // Render charts
   setTimeout(() => {
     renderSpendRevChart(labels, spendData, revData);
-    renderROASChart(labels, roasData, beROAS);
+    renderROASChart(labels, roasData);
   }, 50);
 }
 
@@ -645,7 +625,7 @@ function renderSpendRevChart(labels, spend, rev) {
   });
 }
 
-function renderROASChart(labels, roasData, beROAS) {
+function renderROASChart(labels, roasData) {
   const ctx = document.getElementById('chart-roas');
   if (!ctx) return;
   state.charts.roas = new Chart(ctx, {
@@ -653,8 +633,7 @@ function renderROASChart(labels, roasData, beROAS) {
     data: {
       labels,
       datasets: [
-        { data: roasData, borderColor: '#FF6B2B', backgroundColor: '#FF6B2B15', fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor:'#FF6B2B', borderWidth: 2, spanGaps: true },
-        { data: labels.map(()=>beROAS), borderColor: '#E24B4A', backgroundColor: 'transparent', borderDash:[4,3], pointRadius:0, borderWidth:1.5 }
+        { data: roasData, borderColor: '#FF6B2B', backgroundColor: '#FF6B2B15', fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor:'#FF6B2B', borderWidth: 2, spanGaps: true }
       ]
     },
     options: {
@@ -684,18 +663,6 @@ function formatDate(d) {
 
 function truncate(s, n) { return s && s.length > n ? s.slice(0,n)+'…' : s; }
 
-function roasColor(r, be) {
-  if (r >= be * 1.2) return 'var(--green)';
-  if (r >= be) return 'var(--amber)';
-  return 'var(--red)';
-}
-
-function roasPillHTML(roas, beROAS) {
-  const cls = roas>=beROAS*1.2?'pill-green':roas>=beROAS?'pill-amber':'pill-red';
-  const txt = roas>=beROAS*1.2?'Profitable':roas>=beROAS?'Marginal':'Below BE';
-  return `<span class="profit-pill ${cls}">${txt}</span>`;
-}
-
 function metricCard(label, val, sub, color) {
   return `<div class="metric-card">
     <div class="metric-label">${label}</div>
@@ -717,33 +684,39 @@ function aggregateCampaigns(rows, connector) {
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
 
-function buildInsights(spend, rev, orders, roas, beROAS, contribMargin, contribPct, sorted, connector, roasData) {
+function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, totalOrders) {
   const insights = [];
-  const validROAS = roasData.filter(r=>r!==null);
+  const validROAS = roasData.filter(r => r !== null);
 
-  if (roas >= beROAS * 1.2) insights.push({type:'ok', text:`ROAS of ${roas.toFixed(2)}x is ${((roas/beROAS-1)*100).toFixed(0)}% above break-even — account is generating profitable contribution margin`, tag:'Profitable'});
-  else if (roas >= beROAS) insights.push({type:'warn', text:`ROAS of ${roas.toFixed(2)}x is above break-even (${beROAS.toFixed(2)}x) but with limited headroom — scaling spend could push below profitability`, tag:'Monitor'});
-  else insights.push({type:'bad', text:`ROAS of ${roas.toFixed(2)}x is below break-even (${beROAS.toFixed(2)}x) — ad spend is exceeding contribution margin. Pause or restructure underperforming campaigns`, tag:'Action needed'});
-
-  if (contribMargin > 0) insights.push({type:'ok', text:`Contribution margin after ad spend: £${Math.abs(contribMargin).toFixed(0)} (${contribPct.toFixed(1)}% of revenue) — ads are adding profitable value`, tag:'Healthy margin'});
-  else insights.push({type:'bad', text:`Contribution margin is negative at -£${Math.abs(contribMargin).toFixed(0)} — gross profit is not covering ad spend this period`, tag:'Margin squeeze'});
-
-  const highDays = sorted.filter((_,i)=>roasData[i]!==null&&roasData[i]>=beROAS*1.5);
-  if (highDays.length >= 2) insights.push({type:'ok', text:`${highDays.length} days achieved ROAS above ${(beROAS*1.5).toFixed(1)}x — review creative and audiences active on those dates for scaling signals`, tag:'Scale signal'});
-
-  const lowDays = sorted.filter((_,i)=>roasData[i]!==null&&roasData[i]<beROAS);
-  if (lowDays.length > 0) insights.push({type:'bad', text:`${lowDays.length} day${lowDays.length>1?'s':''} ran below break-even ROAS — review which campaigns were active and consider pausing inefficient ad sets`, tag:'Below BE'});
-
+  // ROAS trend
   if (validROAS.length > 3) {
     const recent = validROAS.slice(-3).reduce((a,b)=>a+b,0)/3;
     const early = validROAS.slice(0,3).reduce((a,b)=>a+b,0)/3;
-    if (recent > early * 1.1) insights.push({type:'ok', text:`ROAS trending upward — recent 3-day average (${recent.toFixed(2)}x) is stronger than opening period (${early.toFixed(2)}x)`, tag:'Improving'});
-    else if (recent < early * 0.9) insights.push({type:'warn', text:`ROAS trending downward — recent 3-day average (${recent.toFixed(2)}x) weaker than opening period (${early.toFixed(2)}x). Review creative fatigue`, tag:'Declining'});
+    if (recent > early * 1.1) insights.push({type:'ok', text:`ROAS trending upward — recent 3-day average (${recent.toFixed(2)}x) is stronger than the opening period (${early.toFixed(2)}x)`, tag:'Improving'});
+    else if (recent < early * 0.9) insights.push({type:'warn', text:`ROAS trending downward — recent 3-day average (${recent.toFixed(2)}x) is weaker than the opening period (${early.toFixed(2)}x). Review for creative fatigue`, tag:'Declining'});
   }
 
-  const avgCPA = orders>0?spend/orders:0;
-  const avgAOV = orders>0?rev/orders:0;
-  if (avgAOV > 0 && avgCPA > avgAOV * 0.4) insights.push({type:'warn', text:`CPA (£${avgCPA.toFixed(2)}) is ${((avgCPA/avgAOV)*100).toFixed(0)}% of AOV (£${avgAOV.toFixed(2)}) — customer acquisition cost is high relative to order value`, tag:'CPA watch'});
+  // Frequency warning
+  if (freq > 3.5) insights.push({type:'warn', text:`Frequency at ${freq.toFixed(2)} — audiences are seeing ads more than 3.5 times on average. Consider refreshing creatives or expanding audiences`, tag:'Ad fatigue'});
+  else if (freq > 2.5) insights.push({type:'warn', text:`Frequency at ${freq.toFixed(2)} — worth monitoring for signs of creative fatigue over the coming days`, tag:'Monitor freq.'});
+
+  // CTR signal
+  if (ctr < 1.0) insights.push({type:'warn', text:`CTR of ${ctr.toFixed(2)}% is below 1% — creatives may not be resonating or audiences may need refreshing`, tag:'Low CTR'});
+  else if (ctr > 2.5) insights.push({type:'ok', text:`CTR of ${ctr.toFixed(2)}% is strong — creatives are generating good engagement relative to impressions`, tag:'Strong CTR'});
+
+  // ROAS variance — flag volatile days
+  if (validROAS.length > 3) {
+    const max = Math.max(...validROAS);
+    const min = Math.min(...validROAS);
+    if (max > min * 2.5) insights.push({type:'warn', text:`ROAS swings significantly day-to-day (low: ${min.toFixed(2)}x, high: ${max.toFixed(2)}x) — worth reviewing what drove the best days`, tag:'High variance'});
+  }
+
+  // CPA vs AOV
+  if (aov > 0 && cpa > aov * 0.5) insights.push({type:'warn', text:`CPA (${fmt(cpa)}) is more than 50% of AOV (${fmt(aov)}) — customer acquisition cost is high relative to order value`, tag:'CPA watch'});
+
+  // Best performing day
+  const bestIdx = roasData.reduce((bi, v, i) => (v !== null && (bi === -1 || v > roasData[bi])) ? i : bi, -1);
+  if (bestIdx >= 0) insights.push({type:'ok', text:`Best ROAS day was ${sorted[bestIdx]?.date ? formatDate(sorted[bestIdx].date) : 'this period'} at ${roasData[bestIdx].toFixed(2)}x — review what was running that day for scaling signals`, tag:'Best day'});
 
   return insights;
 }
