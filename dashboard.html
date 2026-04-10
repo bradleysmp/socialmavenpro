@@ -239,6 +239,19 @@
 
   .fade-in { animation: fadeIn 0.3s ease forwards; }
   @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  /* CREATIVES */
+  .creative-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 14px; }
+  .creative-card { background: var(--bg3); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); transition: border-color 0.15s; }
+  .creative-card:hover { border-color: var(--border2); }
+  .creative-thumb { position: relative; width: 100%; aspect-ratio: 1; background: var(--bg4); overflow: hidden; }
+  .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); }
+  .creative-badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 4px; color: #fff; font-family: 'Syne', sans-serif; }
+  .creative-meta { padding: 10px 12px; }
+  .creative-name { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .creative-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; }
+  .creative-stat-label { color: var(--text3); }
 </style>
 </head>
 <body>
@@ -462,18 +475,25 @@ async function loadData() {
       : ['campaign','spend','impressions','clicks','conversions','revenue'];
     const campRows = await fetchWindsor(connector, accountId, campFields, state.period);
 
-    renderDashboard(rows, campRows, connector);
+    // Creative-level data — ad name, thumbnail, performance
+    let creativeRows = [];
+    if (connector === 'facebook') {
+      creativeRows = await fetchWindsor(connector, accountId,
+        ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url'],
+        state.period);
+    }
+
+    renderDashboard(rows, campRows, creativeRows, connector);
   } catch(e) {
     showError('Could not load data. Check your API key or try refreshing. ' + e.message);
   }
 }
 
 // ─── RENDER ────────────────────────────────────────────────
-function renderDashboard(rows, campRows, connector) {
+function renderDashboard(rows, campRows, creativeRows, connector) {
   const active = rows.filter(r => parseFloat(r.spend||0) > 0);
   if (!active.length) { showError('No data found for this period.'); return; }
 
-  // All metrics sourced directly from Windsor — no estimations
   const totalSpend = sum(active, 'spend');
   const totalRev = connector === 'facebook'
     ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase')
@@ -485,7 +505,6 @@ function renderDashboard(rows, campRows, connector) {
   const totalClicks = sum(active, 'clicks');
   const totalReach = sum(active, 'reach');
 
-  // Derived — mathematically exact from the above
   const roas = totalRev / totalSpend;
   const cpa = totalOrders > 0 ? totalSpend / totalOrders : 0;
   const aov = totalOrders > 0 ? totalRev / totalOrders : 0;
@@ -504,22 +523,21 @@ function renderDashboard(rows, campRows, connector) {
   });
 
   const camps = aggregateCampaigns(campRows, connector);
+  const creatives = aggregateCreatives(creativeRows);
   const insights = buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders);
 
   const html = `<div class="fade-in">
-    <!-- METRICS — all direct from Windsor, no estimates -->
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
       ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '')}
       ${metricCard('ROAS', roas.toFixed(2)+'x', 'Meta attributed', roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)')}
       ${metricCard('CPA', fmt(cpa), `AOV ${fmt(aov)}`, '')}
       ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '')}
-      ${metricCard('CTR', ctr.toFixed(2)+'%', `${(totalClicks).toLocaleString()} clicks`, '')}
+      ${metricCard('CTR', ctr.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '')}
       ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '')}
       ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '')}
     </div>
 
-    <!-- CHARTS -->
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-header">
@@ -537,7 +555,6 @@ function renderDashboard(rows, campRows, connector) {
       </div>
     </div>
 
-    <!-- INSIGHTS -->
     <div class="insights-card">
       <div class="insights-header">Key Insights</div>
       ${insights.map(i=>`
@@ -548,27 +565,16 @@ function renderDashboard(rows, campRows, connector) {
         </div>`).join('')}
     </div>
 
-    <!-- CAMPAIGNS TABLE -->
     <div class="table-card">
-      <div class="table-header">
-        <div class="table-title">Campaign Breakdown</div>
-      </div>
+      <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
       <div style="overflow-x:auto">
         <table>
-          <thead>
-            <tr>
-              <th>Campaign</th>
-              <th>Spend</th>
-              <th>Revenue</th>
-              <th>ROAS</th>
-              <th>Purchases</th>
-              <th>CPA</th>
-              <th>CPM</th>
-              <th>CTR</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>Campaign</th><th>Spend</th><th>Revenue</th><th>ROAS</th>
+            <th>Purchases</th><th>CPA</th><th>CPM</th><th>CTR</th>
+          </tr></thead>
           <tbody>
-            ${camps.slice(0,15).map(c=>{
+            ${camps.slice(0,15).map(c => {
               const cr = c.spend > 0 ? c.rev/c.spend : 0;
               const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
               const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
@@ -576,7 +582,7 @@ function renderDashboard(rows, campRows, connector) {
                 <td title="${c.name}">${truncate(c.name,38)}</td>
                 <td>${fmt(c.spend)}</td>
                 <td>${fmt(c.rev)}</td>
-                <td class="roas-cell" style="color:${cr>=2?'var(--green)':cr>=1?'var(--amber)':'var(--red)'}">${cr.toFixed(2)}x</td>
+                <td style="color:${cr>=2?'var(--green)':cr>=1?'var(--amber)':'var(--red)'};font-weight:500">${cr.toFixed(2)}x</td>
                 <td>${Math.round(c.orders)}</td>
                 <td>${c.orders>0?fmt(c.spend/c.orders):'-'}</td>
                 <td>£${ccpm.toFixed(2)}</td>
@@ -587,6 +593,37 @@ function renderDashboard(rows, campRows, connector) {
         </table>
       </div>
     </div>
+
+    ${creatives.length > 0 ? `
+    <div class="table-card">
+      <div class="table-header"><div class="table-title">Creative Performance</div></div>
+      <div class="creative-grid">
+        ${creatives.slice(0,12).map(c => {
+          const cr = c.spend > 0 ? c.rev/c.spend : 0;
+          const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+          const ccpa = c.orders > 0 ? c.spend/c.orders : 0;
+          return `<div class="creative-card">
+            <div class="creative-thumb">
+              ${c.image_url
+                ? `<img src="${c.image_url}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                : ''}
+              <div class="creative-fallback"${c.image_url?' style="display:none"':''}>
+                ${c.name.slice(0,2).toUpperCase()}
+              </div>
+              <div class="creative-badge" style="background:${cr>=2?'#1D9E75':cr>=1?'#C97B0A':'#E24B4A'}">${cr.toFixed(1)}x</div>
+            </div>
+            <div class="creative-meta">
+              <div class="creative-name" title="${c.name}">${truncate(c.name,28)}</div>
+              <div class="creative-row"><span class="creative-stat-label">Spend</span><span>${fmt(c.spend)}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">Revenue</span><span>${fmt(c.rev)}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">CTR</span><span>${cctr.toFixed(2)}%</span></div>
+              <div class="creative-row"><span class="creative-stat-label">CPA</span><span>${c.orders>0?fmt(ccpa):'-'}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">Purchases</span><span>${Math.round(c.orders)}</span></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
   </div>`;
 
   document.getElementById('content').innerHTML = html;
@@ -674,12 +711,33 @@ function metricCard(label, val, sub, color) {
 function aggregateCampaigns(rows, connector) {
   const map = {};
   rows.forEach(r => {
-    const name = r.campaign || r.ad_name || 'Unknown';
-    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, impressions:0 };
+    const name = r.campaign || 'Unknown';
+    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, impressions:0, clicks:0 };
     map[name].spend += parseFloat(r.spend||0);
     map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.revenue)||0);
     map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.conversions)||0);
     map[name].impressions += parseFloat(r.impressions||0);
+    map[name].clicks += parseFloat(r.clicks||0);
+  });
+  return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
+}
+
+function aggregateCreatives(rows) {
+  if (!rows || !rows.length) return [];
+  const map = {};
+  rows.forEach(r => {
+    const id = r.ad_id || r.ad_name || 'unknown';
+    if (!map[id]) map[id] = {
+      id, name: r.ad_name || 'Unknown',
+      spend:0, rev:0, orders:0, impressions:0, clicks:0,
+      image_url: r.image_url || null
+    };
+    map[id].spend += parseFloat(r.spend||0);
+    map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+    map[id].orders += parseFloat(r.actions_purchase||0);
+    map[id].impressions += parseFloat(r.impressions||0);
+    map[id].clicks += parseFloat(r.clicks||0);
+    if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
