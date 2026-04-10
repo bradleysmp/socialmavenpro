@@ -466,13 +466,13 @@ async function loadData() {
 
     const fields = connector === 'facebook'
       ? ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
-      : ['date','spend','impressions','clicks','conversions','revenue'];
+      : ['date','spend','impressions','clicks','reach','frequency','cpm','roas','total_checkout','total_checkout_value'];
 
     const rows = await fetchWindsor(connector, accountId, fields, state.period);
 
     const campFields = connector === 'facebook'
       ? ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
-      : ['campaign','spend','impressions','clicks','conversions','revenue'];
+      : ['campaign','spend','impressions','clicks','total_checkout','total_checkout_value'];
     const campRows = await fetchWindsor(connector, accountId, campFields, state.period);
 
     // Creative-level data — ad name, thumbnail, performance
@@ -497,10 +497,10 @@ function renderDashboard(rows, campRows, creativeRows, connector) {
   const totalSpend = sum(active, 'spend');
   const totalRev = connector === 'facebook'
     ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase')
-    : sum(active, 'revenue');
+    : sum(active, 'total_checkout_value');
   const totalOrders = connector === 'facebook'
     ? sum(active, 'actions_purchase')
-    : sum(active, 'conversions');
+    : sum(active, 'total_checkout');
   const totalImpressions = sum(active, 'impressions');
   const totalClicks = sum(active, 'clicks');
   const totalReach = sum(active, 'reach');
@@ -515,7 +515,7 @@ function renderDashboard(rows, campRows, creativeRows, connector) {
   const sorted = [...active].sort((a,b)=>a.date.localeCompare(b.date));
   const labels = sorted.map(r => formatDate(r.date));
   const spendData = sorted.map(r => +parseFloat(r.spend||0).toFixed(2));
-  const revData = sorted.map(r => +parseFloat((connector==='facebook' ? r.action_values_offsite_conversion_fb_pixel_purchase : r.revenue)||0).toFixed(2));
+  const revData = sorted.map(r => +parseFloat((connector==='facebook' ? r.action_values_offsite_conversion_fb_pixel_purchase : r.total_checkout_value)||0).toFixed(2));
   const roasData = sorted.map(r => {
     const s = parseFloat(r.spend||0);
     const rv = parseFloat((connector==='facebook' ? r.action_values_offsite_conversion_fb_pixel_purchase : r.revenue)||0);
@@ -715,8 +715,8 @@ function aggregateCampaigns(rows, connector) {
     const name = r.campaign || 'Unknown';
     if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, impressions:0, clicks:0 };
     map[name].spend += parseFloat(r.spend||0);
-    map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.revenue)||0);
-    map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.conversions)||0);
+    map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.total_checkout_value)||0);
+    map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.total_checkout)||0);
     map[name].impressions += parseFloat(r.impressions||0);
     map[name].clicks += parseFloat(r.clicks||0);
   });
