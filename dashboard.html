@@ -386,15 +386,18 @@ async function fetchWindsor(connector, accountId, fields, datePreset) {
   const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}`;
   if (state.cache[cacheKey]) return state.cache[cacheKey];
 
-  const params = new URLSearchParams({
-    api_key: state.apiKey,
-    connector,
-    date_preset: datePreset,
-    fields: fields.join(','),
-    account_id: accountId,
+  const res = await fetch('/.netlify/functions/windsor', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: state.apiKey,
+      connector,
+      date_preset: datePreset,
+      fields: fields.join(','),
+      account_id: accountId,
+    })
   });
 
-  const res = await fetch(`${WINDSOR_BASE}?${params}`);
   if (!res.ok) throw new Error(`Windsor API error: ${res.status}`);
   const json = await res.json();
   const data = json.data || json;
