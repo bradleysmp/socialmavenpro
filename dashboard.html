@@ -343,6 +343,10 @@ const CLIENTS = {
     '549770135568': '1142622296536709',
     '549762428303': '877017732651263',
     '549766701568': '468452590544702',
+  },
+  pinterest_organic: {
+    'fragrancesamplesUK': '1142622296536709',
+    'cplights': '877017732651263',
   }
 };
 
@@ -426,8 +430,8 @@ function setPlatform(platform, btn) {
 }
 
 // ─── WINDSOR FETCH ─────────────────────────────────────────
-async function fetchWindsor(connector, accountId, fields, datePreset) {
-  const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}`;
+async function fetchWindsor(connector, accountId, fields, datePreset, options = {}) {
+  const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}_${JSON.stringify(options)}`;
   if (state.cache[cacheKey]) return state.cache[cacheKey];
 
   const res = await fetch('/.netlify/functions/windsor', {
@@ -439,6 +443,7 @@ async function fetchWindsor(connector, accountId, fields, datePreset) {
       date_preset: datePreset,
       fields: fields.join(','),
       account_id: accountId,
+      options,
     })
   });
 
@@ -457,40 +462,52 @@ async function loadData() {
   try {
     const connector = state.platform;
     let accountId = state.client;
+    let organicRows = [];
 
     if (connector === 'pinterest') {
       const pid = Object.entries(CLIENTS.pinterest).find(([k,v])=>v===state.client)?.[0];
       if (!pid) { showError('No Pinterest account linked for this client.'); return; }
       accountId = pid;
+
+      // Fetch organic data in parallel if available
+      const organicId = Object.entries(CLIENTS.pinterest_organic).find(([k,v])=>v===state.client)?.[0];
+      const pinterestOptions = { attribution_window: '30/30/30', conversion_report_time: 'TIME_OF_CONVERSION' };
+
+      const paidFields = ['date','spend','impressions','clicks','reach','frequency','cpm','total_checkout','total_checkout_value'];
+      const campFields = ['campaign','spend','impressions','clicks','total_checkout','total_checkout_value'];
+
+      const [rows, campRows, orgRows] = await Promise.all([
+        fetchWindsor('pinterest', accountId, paidFields, state.period, pinterestOptions),
+        fetchWindsor('pinterest', accountId, campFields, state.period, pinterestOptions),
+        organicId ? fetchWindsor('pinterest_organic', organicId,
+          ['date','pin_impression','pin_click','pin_outbound_click','pin_save'],
+          state.period, { 'account__content_type': 'ORGANIC' }) : Promise.resolve([]),
+      ]);
+
+      organicRows = orgRows;
+      renderDashboard(rows, campRows, [], connector, organicRows);
+      return;
     }
 
-    const fields = connector === 'facebook'
-      ? ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
-      : ['date','spend','impressions','clicks','reach','frequency','cpm','roas','total_checkout','total_checkout_value'];
+    const fields = ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+    const campFields = ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
-    const rows = await fetchWindsor(connector, accountId, fields, state.period);
-
-    const campFields = connector === 'facebook'
-      ? ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']
-      : ['campaign','spend','impressions','clicks','total_checkout','total_checkout_value'];
-    const campRows = await fetchWindsor(connector, accountId, campFields, state.period);
-
-    // Creative-level data — ad name, thumbnail, performance
-    let creativeRows = [];
-    if (connector === 'facebook') {
-      creativeRows = await fetchWindsor(connector, accountId,
+    const [rows, campRows, creativeRows] = await Promise.all([
+      fetchWindsor(connector, accountId, fields, state.period),
+      fetchWindsor(connector, accountId, campFields, state.period),
+      connector === 'facebook' ? fetchWindsor(connector, accountId,
         ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'],
-        state.period);
-    }
+        state.period) : Promise.resolve([]),
+    ]);
 
-    renderDashboard(rows, campRows, creativeRows, connector);
+    renderDashboard(rows, campRows, creativeRows, connector, []);
   } catch(e) {
     showError('Could not load data. Check your API key or try refreshing. ' + e.message);
   }
 }
 
 // ─── RENDER ────────────────────────────────────────────────
-function renderDashboard(rows, campRows, creativeRows, connector) {
+function renderDashboard(rows, campRows, creativeRows, connector, organicRows = []) {
   const active = rows.filter(r => parseFloat(r.spend||0) > 0);
   if (!active.length) { showError('No data found for this period.'); return; }
 
@@ -593,6 +610,41 @@ function renderDashboard(rows, campRows, creativeRows, connector) {
         </table>
       </div>
     </div>
+
+    ${organicRows.length > 0 ? (() => {
+      const orgActive = organicRows.filter(r => parseFloat(r.pin_impression||0) > 0);
+      const orgImpr = orgActive.reduce((a,r)=>a+parseFloat(r.pin_impression||0),0);
+      const orgClicks = orgActive.reduce((a,r)=>a+parseFloat(r.pin_click||0),0);
+      const orgOutbound = orgActive.reduce((a,r)=>a+parseFloat(r.pin_outbound_click||0),0);
+      const orgSaves = orgActive.reduce((a,r)=>a+parseFloat(r.pin_save||0),0);
+      const orgCtr = orgImpr > 0 ? (orgClicks/orgImpr*100) : 0;
+      const totalImprCombined = totalImpressions + orgImpr;
+      const totalClicksCombined = totalClicks + orgClicks;
+      return `
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Organic Performance</div>
+        <div style="font-size:11px;color:var(--text3)">Pinterest organic · content_type: ORGANIC</div>
+      </div>
+      <div style="padding:14px 16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;">
+          ${metricCard('Organic Impr.', (orgImpr/1000).toFixed(1)+'k', 'from pins', '')}
+          ${metricCard('Organic Clicks', orgClicks.toLocaleString(), `${orgCtr.toFixed(2)}% CTR`, '')}
+          ${metricCard('Outbound Clicks', orgOutbound.toLocaleString(), 'to website', '')}
+          ${metricCard('Saves', orgSaves.toLocaleString(), 'pin saves', '')}
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;">Combined Paid + Organic</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+            ${metricCard('Total Impressions', (totalImprCombined/1000).toFixed(1)+'k', `${(totalImpressions/1000).toFixed(1)}k paid · ${(orgImpr/1000).toFixed(1)}k organic`, '')}
+            ${metricCard('Total Clicks', totalClicksCombined.toLocaleString(), `${totalClicks.toLocaleString()} paid · ${orgClicks.toLocaleString()} organic`, '')}
+            ${metricCard('Organic Share', orgImpr > 0 ? (orgImpr/totalImprCombined*100).toFixed(0)+'%' : '-', 'of total impressions', '')}
+            ${metricCard('Paid Outbound', totalClicks.toLocaleString(), 'vs '+orgOutbound.toLocaleString()+' organic', '')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+    })() : ''}
 
     ${creatives.length > 0 ? `
     <div class="table-card">
