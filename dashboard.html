@@ -256,7 +256,55 @@
 </head>
 <body>
 
+<!-- PASSWORD GATE -->
+<div id="password-gate" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="width:100%;max-width:360px;padding:0 24px;">
+    <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;margin-bottom:4px;">SM<span style="color:#FF6B2B">Pro</span></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:32px;">Paid Social · Client Dashboard</div>
+    <div style="margin-bottom:12px;">
+      <input id="gate-password" type="password" placeholder="Enter password"
+        style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:10px 14px;outline:none;box-sizing:border-box;"
+        onkeydown="if(event.key==='Enter')checkPassword()"
+        onfocus="this.style.borderColor='#FF6B2B'" onblur="this.style.borderColor='rgba(255,255,255,0.10)'" />
+    </div>
+    <button onclick="checkPassword()"
+      style="width:100%;background:#FF6B2B;color:#fff;border:none;border-radius:6px;padding:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;">
+      Access dashboard
+    </button>
+    <div id="gate-error" style="font-size:12px;color:#E24B4A;margin-top:10px;display:none;">Incorrect password</div>
+  </div>
+</div>
+
+<script>
+  // Password gate — runs before anything else
+  const DASHBOARD_PASSWORD = 'Backlinks20008';
+  function checkPassword() {
+    const val = document.getElementById('gate-password').value;
+    if (val === DASHBOARD_PASSWORD) {
+      sessionStorage.setItem('smp_auth', '1');
+      document.getElementById('password-gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+    } else {
+      document.getElementById('gate-error').style.display = 'block';
+      document.getElementById('gate-password').value = '';
+      document.getElementById('gate-password').focus();
+    }
+  }
+  // Check if already authenticated this session
+  if (sessionStorage.getItem('smp_auth') === '1') {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('password-gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+    });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('app').style.display = 'none';
+    });
+  }
+</script>
+
 <!-- SIDEBAR TOGGLE -->
+<div id="app">
 <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
     <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -856,5 +904,6 @@ function showError(msg) {
 
 init();
 </script>
+</div><!-- #app -->
 </body>
 </html>
