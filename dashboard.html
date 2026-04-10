@@ -479,7 +479,7 @@ async function loadData() {
     let creativeRows = [];
     if (connector === 'facebook') {
       creativeRows = await fetchWindsor(connector, accountId,
-        ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url'],
+        ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'],
         state.period);
     }
 
@@ -602,12 +602,13 @@ function renderDashboard(rows, campRows, creativeRows, connector) {
           const cr = c.spend > 0 ? c.rev/c.spend : 0;
           const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
           const ccpa = c.orders > 0 ? c.spend/c.orders : 0;
+          const displayImg = imgProxy(c.thumbnail_url || c.image_url);
           return `<div class="creative-card">
             <div class="creative-thumb">
-              ${c.image_url
-                ? `<img src="${c.image_url}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+              ${displayImg
+                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
                 : ''}
-              <div class="creative-fallback"${c.image_url?' style="display:none"':''}>
+              <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
               <div class="creative-badge" style="background:${cr>=2?'#1D9E75':cr>=1?'#C97B0A':'#E24B4A'}">${cr.toFixed(1)}x</div>
@@ -722,6 +723,11 @@ function aggregateCampaigns(rows, connector) {
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
 
+function imgProxy(url) {
+  if (!url) return null;
+  return `/.netlify/functions/imgproxy?url=${encodeURIComponent(url)}`;
+}
+
 function aggregateCreatives(rows) {
   if (!rows || !rows.length) return [];
   const map = {};
@@ -730,7 +736,7 @@ function aggregateCreatives(rows) {
     if (!map[id]) map[id] = {
       id, name: r.ad_name || 'Unknown',
       spend:0, rev:0, orders:0, impressions:0, clicks:0,
-      image_url: r.image_url || null
+      image_url: null, thumbnail_url: null
     };
     map[id].spend += parseFloat(r.spend||0);
     map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
@@ -738,6 +744,7 @@ function aggregateCreatives(rows) {
     map[id].impressions += parseFloat(r.impressions||0);
     map[id].clicks += parseFloat(r.clicks||0);
     if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
+    if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
