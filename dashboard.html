@@ -277,7 +277,7 @@
 
 <script>
   // Password gate — runs before anything else
-  const DASHBOARD_PASSWORD = 'Backlinks20008';
+  const DASHBOARD_PASSWORD = 'smp2026!';
   function checkPassword() {
     const val = document.getElementById('gate-password').value;
     if (val === DASHBOARD_PASSWORD) {
@@ -374,6 +374,9 @@
 <script>
 // ─── CONFIG ────────────────────────────────────────────────
 const WINDSOR_BASE = 'https://connectors.windsor.ai/';
+
+// Lead gen clients — different metric set
+const LEAD_GEN_CLIENTS = ['457775049411494'];
 
 const CLIENTS = {
   facebook: [
@@ -537,61 +540,98 @@ async function loadData() {
       return;
     }
 
-    const fields = ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
-    const campFields = ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+    const isLeadGen = LEAD_GEN_CLIENTS.includes(accountId);
+
+    const fields = isLeadGen
+      ? ['date','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead','cost_per_action_type_offsite_conversion_fb_pixel_purchase','actions_landing_page_view']
+      : ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+
+    const campFields = isLeadGen
+      ? ['campaign','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
+      : ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period),
       fetchWindsor(connector, accountId, campFields, state.period),
-      connector === 'facebook' ? fetchWindsor(connector, accountId,
-        ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'],
-        state.period) : Promise.resolve([]),
+      fetchWindsor(connector, accountId,
+        ['ad_name','ad_id','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url'],
+        state.period),
     ]);
 
-    renderDashboard(rows, campRows, creativeRows, connector, []);
+    renderDashboard(rows, campRows, creativeRows, connector, [], isLeadGen);
   } catch(e) {
     showError('Could not load data. Check your API key or try refreshing. ' + e.message);
   }
 }
 
 // ─── RENDER ────────────────────────────────────────────────
-function renderDashboard(rows, campRows, creativeRows, connector, organicRows = []) {
+function renderDashboard(rows, campRows, creativeRows, connector, organicRows = [], isLeadGen = false) {
   const active = rows.filter(r => parseFloat(r.spend||0) > 0);
   if (!active.length) { showError('No data found for this period.'); return; }
 
   const totalSpend = sum(active, 'spend');
-  const totalRev = connector === 'facebook'
-    ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase')
-    : sum(active, 'total_checkout_value');
-  const totalOrders = connector === 'facebook'
-    ? sum(active, 'actions_purchase')
-    : sum(active, 'total_checkout');
   const totalImpressions = sum(active, 'impressions');
   const totalClicks = sum(active, 'clicks');
   const totalReach = sum(active, 'reach');
-
-  const roas = totalRev / totalSpend;
-  const cpa = totalOrders > 0 ? totalSpend / totalOrders : 0;
-  const aov = totalOrders > 0 ? totalRev / totalOrders : 0;
   const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0;
   const avgCpm = totalImpressions > 0 ? (totalSpend / totalImpressions * 1000) : 0;
   const avgFreq = totalReach > 0 ? totalImpressions / totalReach : 0;
 
+  // Lead gen metrics
+  const totalLeads = isLeadGen ? sum(active, 'actions_offsite_conversion_fb_pixel_lead') : 0;
+  const totalPurchases = isLeadGen ? sum(active, 'actions_purchase') : 0;
+  const totalLPV = isLeadGen ? sum(active, 'actions_landing_page_view') : 0;
+  const cpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
+  const cpp = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
+  const leadRate = totalLPV > 0 ? (totalLeads / totalLPV * 100) : 0;
+  const clickToLead = totalClicks > 0 ? (totalLeads / totalClicks * 100) : 0;
+
+  // Ecom metrics
+  const totalRev = !isLeadGen ? (connector === 'facebook' ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase') : sum(active, 'total_checkout_value')) : 0;
+  const totalOrders = !isLeadGen ? (connector === 'facebook' ? sum(active, 'actions_purchase') : sum(active, 'total_checkout')) : 0;
+  const roas = !isLeadGen && totalSpend > 0 ? totalRev / totalSpend : 0;
+  const cpa = !isLeadGen && totalOrders > 0 ? totalSpend / totalOrders : 0;
+  const aov = !isLeadGen && totalOrders > 0 ? totalRev / totalOrders : 0;
+
   const sorted = [...active].sort((a,b)=>a.date.localeCompare(b.date));
   const labels = sorted.map(r => formatDate(r.date));
   const spendData = sorted.map(r => +parseFloat(r.spend||0).toFixed(2));
-  const revData = sorted.map(r => +parseFloat((connector==='facebook' ? r.action_values_offsite_conversion_fb_pixel_purchase : r.total_checkout_value)||0).toFixed(2));
+  const primaryData = isLeadGen
+    ? sorted.map(r => parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0))
+    : sorted.map(r => +parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0).toFixed(2));
+  const secondaryData = isLeadGen
+    ? sorted.map(r => parseFloat(r.actions_purchase||0))
+    : null;
   const roasData = sorted.map(r => {
     const s = parseFloat(r.spend||0);
-    const rv = parseFloat((connector==='facebook' ? r.action_values_offsite_conversion_fb_pixel_purchase : r.revenue)||0);
-    return s > 0 ? +(rv/s).toFixed(2) : null;
+    if (!s) return null;
+    if (isLeadGen) {
+      const l = parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+      return l > 0 ? +(s/l).toFixed(2) : null;
+    }
+    const rv = parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0);
+    return +(rv/s).toFixed(2);
   });
 
-  const camps = aggregateCampaigns(campRows, connector);
-  const creatives = aggregateCreatives(creativeRows);
-  const insights = buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders);
+  const camps = aggregateCampaigns(campRows, connector, isLeadGen);
+  const creatives = aggregateCreatives(creativeRows, isLeadGen);
+  const insights = isLeadGen
+    ? buildLeadGenInsights(totalSpend, totalLeads, totalPurchases, cpl, cpp, leadRate, clickToLead, sorted, roasData)
+    : buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders);
 
-  const html = `<div class="fade-in">
+  const metricsHTML = isLeadGen ? `
+    <div class="metrics-grid">
+      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
+      ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)')}
+      ${metricCard('Cost Per Lead', fmt(cpl), 'CPL', cpl > 0 && cpl < 15 ? 'var(--green)' : cpl < 30 ? 'var(--amber)' : 'var(--red)')}
+      ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, '')}
+      ${metricCard('Cost Per Purchase', fmt(cpp), 'oven jobs/bookings', '')}
+      ${metricCard('Landing Page Views', totalLPV.toLocaleString(), `${leadRate.toFixed(1)}% lead rate`, '')}
+      ${metricCard('Click → Lead', clickToLead.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '')}
+      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '')}
+      ${metricCard('CTR', ctr.toFixed(2)+'%', `Freq. ${avgFreq.toFixed(2)}`, '')}
+      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', 'unique people', '')}
+    </div>` : `
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
       ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '')}
@@ -601,35 +641,41 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       ${metricCard('CTR', ctr.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '')}
       ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '')}
       ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '')}
-    </div>
+    </div>`;
 
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-header">
-          <div class="chart-title">Spend vs Revenue</div>
-          <div class="chart-legend">
-            <div class="legend-item"><span class="legend-dot" style="background:#FF6B2B"></span>Spend</div>
-            <div class="legend-item"><span class="legend-dot" style="background:#1D9E75"></span>Revenue</div>
-          </div>
-        </div>
-        <div style="position:relative;width:100%;height:220px;"><canvas id="chart-sr"></canvas></div>
+  const chartLabel = isLeadGen ? 'Spend vs Leads' : (connector === 'pinterest' ? 'Spend vs Checkouts' : 'Spend vs Revenue');
+  const secondaryLabel = isLeadGen ? 'Leads' : (connector === 'pinterest' ? 'Checkouts' : 'Revenue');
+  const roasChartLabel = isLeadGen ? 'Daily CPL trend' : 'Daily ROAS';
+  const campaignTableHTML = isLeadGen ? `
+    <div class="table-card">
+      <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Campaign</th><th>Spend</th><th>Leads</th><th>CPL</th>
+            <th>Purchases</th><th>CPP</th><th>CTR</th><th>CPM</th>
+          </tr></thead>
+          <tbody>
+            ${camps.slice(0,15).map(c => {
+              const ccpl = c.leads > 0 ? c.spend/c.leads : 0;
+              const ccpp = c.orders > 0 ? c.spend/c.orders : 0;
+              const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+              const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
+              return `<tr>
+                <td title="${c.name}">${truncate(c.name,38)}</td>
+                <td>${fmt(c.spend)}</td>
+                <td style="color:${c.leads>0?'var(--green)':'var(--text3)'};font-weight:500">${Math.round(c.leads)}</td>
+                <td style="color:${ccpl>0&&ccpl<15?'var(--green)':ccpl<30?'var(--amber)':'var(--red)'};font-weight:500">${ccpl>0?fmt(ccpl):'-'}</td>
+                <td>${Math.round(c.orders)}</td>
+                <td>${ccpp>0?fmt(ccpp):'-'}</td>
+                <td>${cctr.toFixed(2)}%</td>
+                <td>£${ccpm.toFixed(2)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
       </div>
-      <div class="chart-card">
-        <div class="chart-header"><div class="chart-title">Daily ROAS</div></div>
-        <div style="position:relative;width:100%;height:220px;"><canvas id="chart-roas"></canvas></div>
-      </div>
-    </div>
-
-    <div class="insights-card">
-      <div class="insights-header">Key Insights</div>
-      ${insights.map(i=>`
-        <div class="insight-row">
-          <div class="insight-ico ${i.type==='ok'?'ico-g':i.type==='bad'?'ico-r':'ico-a'}">${i.type==='ok'?'✓':i.type==='bad'?'!':'~'}</div>
-          <div class="insight-text">${i.text}</div>
-          <span class="insight-tag ${i.type==='ok'?'pill-green':i.type==='bad'?'pill-red':'pill-amber'}">${i.tag}</span>
-        </div>`).join('')}
-    </div>
-
+    </div>` : `
     <div class="table-card">
       <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
       <div style="overflow-x:auto">
@@ -657,7 +703,40 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           </tbody>
         </table>
       </div>
+    </div>`;
+
+  const html = `<div class="fade-in">
+    ${metricsHTML}
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">${chartLabel}</div>
+          <div class="chart-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#FF6B2B"></span>Spend</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#1D9E75"></span>${secondaryLabel}</div>
+            ${isLeadGen ? `<div class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>Purchases</div>` : ''}
+          </div>
+        </div>
+        <div style="position:relative;width:100%;height:220px;"><canvas id="chart-sr"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div class="chart-title">${roasChartLabel}</div></div>
+        <div style="position:relative;width:100%;height:220px;"><canvas id="chart-roas"></canvas></div>
+      </div>
     </div>
+
+    <div class="insights-card">
+      <div class="insights-header">Key Insights</div>
+      ${insights.map(i=>`
+        <div class="insight-row">
+          <div class="insight-ico ${i.type==='ok'?'ico-g':i.type==='bad'?'ico-r':'ico-a'}">${i.type==='ok'?'✓':i.type==='bad'?'!':'~'}</div>
+          <div class="insight-text">${i.text}</div>
+          <span class="insight-tag ${i.type==='ok'?'pill-green':i.type==='bad'?'pill-red':'pill-amber'}">${i.tag}</span>
+        </div>`).join('')}
+    </div>
+
+    ${campaignTableHTML}
 
     ${organicRows.length > 0 ? (() => {
       const orgActive = organicRows.filter(r => parseFloat(r.pin_impression||0) > 0);
@@ -699,9 +778,14 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       <div class="table-header"><div class="table-title">Creative Performance</div></div>
       <div class="creative-grid">
         ${creatives.slice(0,12).map(c => {
-          const cr = c.spend > 0 ? c.rev/c.spend : 0;
+          const cr = c.spend > 0 ? (isLeadGen ? (c.leads > 0 ? c.spend/c.leads : 0) : c.rev/c.spend) : 0;
           const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
-          const ccpa = c.orders > 0 ? c.spend/c.orders : 0;
+          const primaryVal = isLeadGen ? Math.round(c.leads) : fmt(c.rev);
+          const primaryLabel = isLeadGen ? 'Leads' : 'Revenue';
+          const secondaryVal = isLeadGen ? (c.leads > 0 ? fmt(c.spend/c.leads) : '-') : (c.orders > 0 ? fmt(c.spend/c.orders) : '-');
+          const secondaryLabel = isLeadGen ? 'CPL' : 'CPA';
+          const badgeColor = isLeadGen ? (cr > 0 && cr < 15 ? '#1D9E75' : cr < 30 ? '#C97B0A' : '#E24B4A') : (cr>=2?'#1D9E75':cr>=1?'#C97B0A':'#E24B4A');
+          const badgeVal = isLeadGen ? (cr > 0 ? '£'+cr.toFixed(0) : '-') : cr.toFixed(1)+'x';
           const displayImg = imgProxy(c.thumbnail_url || c.image_url);
           return `<div class="creative-card">
             <div class="creative-thumb">
@@ -711,14 +795,14 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
-              <div class="creative-badge" style="background:${cr>=2?'#1D9E75':cr>=1?'#C97B0A':'#E24B4A'}">${cr.toFixed(1)}x</div>
+              <div class="creative-badge" style="background:${badgeColor}">${badgeVal}</div>
             </div>
             <div class="creative-meta">
               <div class="creative-name" title="${c.name}">${truncate(c.name,28)}</div>
               <div class="creative-row"><span class="creative-stat-label">Spend</span><span>${fmt(c.spend)}</span></div>
-              <div class="creative-row"><span class="creative-stat-label">Revenue</span><span>${fmt(c.rev)}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">${primaryLabel}</span><span>${primaryVal}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">${secondaryLabel}</span><span>${secondaryVal}</span></div>
               <div class="creative-row"><span class="creative-stat-label">CTR</span><span>${cctr.toFixed(2)}%</span></div>
-              <div class="creative-row"><span class="creative-stat-label">CPA</span><span>${c.orders>0?fmt(ccpa):'-'}</span></div>
               <div class="creative-row"><span class="creative-stat-label">Purchases</span><span>${Math.round(c.orders)}</span></div>
             </div>
           </div>`;
@@ -729,8 +813,8 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
 
   document.getElementById('content').innerHTML = html;
   setTimeout(() => {
-    renderSpendRevChart(labels, spendData, revData);
-    renderROASChart(labels, roasData);
+    renderSpendRevChart(labels, spendData, primaryData, secondaryData, isLeadGen);
+    renderROASChart(labels, roasData, isLeadGen);
   }, 50);
 }
 
@@ -740,30 +824,31 @@ function destroyCharts() {
   state.charts = {};
 }
 
-function renderSpendRevChart(labels, spend, rev) {
+function renderSpendRevChart(labels, spend, primary, secondary, isLeadGen) {
   const ctx = document.getElementById('chart-sr');
   if (!ctx) return;
+  const datasets = [
+    { label: 'Spend', data: spend, backgroundColor: '#FF6B2B55', borderColor: '#FF6B2B', borderWidth: 1, borderRadius: 2, order: 3, type: 'bar' },
+    { label: isLeadGen ? 'Leads' : 'Revenue', data: primary, type: 'line', borderColor: '#1D9E75', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 1, yAxisID: isLeadGen ? 'y2' : 'y' },
+  ];
+  if (isLeadGen && secondary) {
+    datasets.push({ label: 'Purchases', data: secondary, type: 'line', borderColor: '#378ADD', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 2, yAxisID: 'y2' });
+  }
+  const scales = {
+    x: { ticks: { font:{size:9}, color:'#5A5856', maxTicksLimit:10, autoSkip:true }, grid: { display:false }, border:{color:'#222'} },
+    y: { ticks: { font:{size:9}, color:'#5A5856', callback: v=>'£'+(v>=1000?(v/1000).toFixed(1)+'k':v) }, grid: { color:'rgba(255,255,255,0.04)' }, border:{color:'#222'} },
+  };
+  if (isLeadGen) {
+    scales.y2 = { position: 'right', ticks: { font:{size:9}, color:'#1D9E75' }, grid: { display:false }, border:{color:'#222'} };
+  }
   state.charts.sr = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Spend', data: spend, backgroundColor: '#FF6B2B55', borderColor: '#FF6B2B', borderWidth: 1, borderRadius: 2, order: 2 },
-        { label: 'Revenue', data: rev, type: 'line', borderColor: '#1D9E75', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 1 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { font:{size:9}, color:'#5A5856', maxTicksLimit:10, autoSkip:true }, grid: { display:false }, border:{color:'#222'} },
-        y: { ticks: { font:{size:9}, color:'#5A5856', callback: v=>'£'+(v>=1000?(v/1000).toFixed(1)+'k':v) }, grid: { color:'rgba(255,255,255,0.04)' }, border:{color:'#222'} }
-      }
-    }
+    data: { labels, datasets },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales }
   });
 }
 
-function renderROASChart(labels, roasData) {
+function renderROASChart(labels, roasData, isLeadGen) {
   const ctx = document.getElementById('chart-roas');
   if (!ctx) return;
   state.charts.roas = new Chart(ctx, {
@@ -779,7 +864,7 @@ function renderROASChart(labels, roasData) {
       plugins: { legend: { display:false } },
       scales: {
         x: { ticks:{font:{size:9},color:'#5A5856',maxTicksLimit:8,autoSkip:true}, grid:{display:false}, border:{color:'#222'} },
-        y: { ticks:{font:{size:9},color:'#5A5856',callback:v=>v+'x'}, grid:{color:'rgba(255,255,255,0.04)'}, border:{color:'#222'} }
+        y: { ticks:{font:{size:9},color:'#5A5856',callback: v => isLeadGen ? '£'+v : v+'x'}, grid:{color:'rgba(255,255,255,0.04)'}, border:{color:'#222'} }
       }
     }
   });
@@ -809,16 +894,21 @@ function metricCard(label, val, sub, color) {
   </div>`;
 }
 
-function aggregateCampaigns(rows, connector) {
+function aggregateCampaigns(rows, connector, isLeadGen = false) {
   const map = {};
   rows.forEach(r => {
     const name = r.campaign || 'Unknown';
-    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, impressions:0, clicks:0 };
+    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0 };
     map[name].spend += parseFloat(r.spend||0);
-    map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.total_checkout_value)||0);
-    map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.total_checkout)||0);
     map[name].impressions += parseFloat(r.impressions||0);
     map[name].clicks += parseFloat(r.clicks||0);
+    if (isLeadGen) {
+      map[name].leads += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+      map[name].orders += parseFloat(r.actions_purchase||0);
+    } else {
+      map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.total_checkout_value)||0);
+      map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.total_checkout)||0);
+    }
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
@@ -828,25 +918,62 @@ function imgProxy(url) {
   return `/.netlify/functions/imgproxy?url=${encodeURIComponent(url)}`;
 }
 
-function aggregateCreatives(rows) {
+function aggregateCreatives(rows, isLeadGen = false) {
   if (!rows || !rows.length) return [];
   const map = {};
   rows.forEach(r => {
     const id = r.ad_id || r.ad_name || 'unknown';
     if (!map[id]) map[id] = {
       id, name: r.ad_name || 'Unknown',
-      spend:0, rev:0, orders:0, impressions:0, clicks:0,
+      spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0,
       image_url: null, thumbnail_url: null
     };
     map[id].spend += parseFloat(r.spend||0);
-    map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
-    map[id].orders += parseFloat(r.actions_purchase||0);
     map[id].impressions += parseFloat(r.impressions||0);
     map[id].clicks += parseFloat(r.clicks||0);
+    if (isLeadGen) {
+      map[id].leads += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+      map[id].orders += parseFloat(r.actions_purchase||0);
+    } else {
+      map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+      map[id].orders += parseFloat(r.actions_purchase||0);
+    }
     if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
     if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
+}
+
+function buildLeadGenInsights(spend, leads, purchases, cpl, cpp, leadRate, clickToLead, sorted, cplData) {
+  const insights = [];
+  const validCPL = cplData.filter(v => v !== null && v > 0);
+
+  if (leads === 0) {
+    insights.push({type:'bad', text:'No leads recorded this period — check pixel is firing correctly on the thank you / confirmation page', tag:'Pixel check'});
+  } else {
+    insights.push({type:'ok', text:`${leads} leads generated at ${fmt(cpl)} CPL — ${purchases} purchases/bookings also tracked alongside lead volume`, tag:'Lead volume'});
+  }
+
+  if (leadRate > 0) {
+    if (leadRate >= 10) insights.push({type:'ok', text:`Landing page converting at ${leadRate.toFixed(1)}% — strong lead rate from paid traffic landing page views`, tag:'Strong CVR'});
+    else if (leadRate >= 5) insights.push({type:'warn', text:`Landing page converting at ${leadRate.toFixed(1)}% — room to improve. Review page copy, form friction and load speed`, tag:'CVR opportunity'});
+    else insights.push({type:'bad', text:`Landing page converting at only ${leadRate.toFixed(1)}% — significant drop-off between landing page view and lead. Prioritise CRO`, tag:'Low CVR'});
+  }
+
+  if (validCPL.length > 3) {
+    const recent = validCPL.slice(-3).reduce((a,b)=>a+b,0)/3;
+    const early = validCPL.slice(0,3).reduce((a,b)=>a+b,0)/3;
+    if (recent < early * 0.9) insights.push({type:'ok', text:`CPL improving — recent 3-day average (${fmt(recent)}) is lower than the opening period (${fmt(early)})`, tag:'CPL improving'});
+    else if (recent > early * 1.1) insights.push({type:'warn', text:`CPL rising — recent 3-day average (${fmt(recent)}) is higher than the opening period (${fmt(early)}). Review creative fatigue`, tag:'CPL rising'});
+  }
+
+  if (clickToLead > 0 && clickToLead < 3) insights.push({type:'warn', text:`Only ${clickToLead.toFixed(2)}% of clicks convert to a lead — consider whether landing page messaging matches ad creative`, tag:'Ad-page match'});
+  if (purchases > 0 && leads > 0) {
+    const leadToPurchase = (purchases / leads * 100);
+    insights.push({type: leadToPurchase > 20 ? 'ok' : 'warn', text:`${leadToPurchase.toFixed(0)}% of leads converting to purchases/bookings — ${leadToPurchase > 20 ? 'strong lead quality' : 'review lead quality and follow-up process'}`, tag:'Lead quality'});
+  }
+
+  return insights;
 }
 
 function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, totalOrders) {
