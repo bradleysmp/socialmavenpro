@@ -550,12 +550,14 @@ async function loadData() {
       ? ['campaign','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
       : ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
+    const creativeFields = isLeadGen
+      ? ['ad_name','ad_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url']
+      : ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'];
+
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period),
       fetchWindsor(connector, accountId, campFields, state.period),
-      fetchWindsor(connector, accountId,
-        ['ad_name','ad_id','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url'],
-        state.period),
+      fetchWindsor(connector, accountId, creativeFields, state.period),
     ]);
 
     renderDashboard(rows, campRows, creativeRows, connector, [], isLeadGen);
@@ -778,14 +780,14 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       <div class="table-header"><div class="table-title">Creative Performance</div></div>
       <div class="creative-grid">
         ${creatives.slice(0,12).map(c => {
-          const cr = c.spend > 0 ? (isLeadGen ? (c.leads > 0 ? c.spend/c.leads : 0) : c.rev/c.spend) : 0;
+          const roas = c.spend > 0 && c.rev > 0 ? c.rev/c.spend : 0;
           const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
           const primaryVal = isLeadGen ? Math.round(c.leads) : fmt(c.rev);
           const primaryLabel = isLeadGen ? 'Leads' : 'Revenue';
           const secondaryVal = isLeadGen ? (c.leads > 0 ? fmt(c.spend/c.leads) : '-') : (c.orders > 0 ? fmt(c.spend/c.orders) : '-');
           const secondaryLabel = isLeadGen ? 'CPL' : 'CPA';
-          const badgeColor = isLeadGen ? (cr > 0 && cr < 15 ? '#1D9E75' : cr < 30 ? '#C97B0A' : '#E24B4A') : (cr>=2?'#1D9E75':cr>=1?'#C97B0A':'#E24B4A');
-          const badgeVal = isLeadGen ? (cr > 0 ? '£'+cr.toFixed(0) : '-') : cr.toFixed(1)+'x';
+          const showBadge = !isLeadGen && roas > 0;
+          const badgeColor = roas>=2?'#1D9E75':roas>=1?'#C97B0A':'#E24B4A';
           const displayImg = imgProxy(c.thumbnail_url || c.image_url);
           return `<div class="creative-card">
             <div class="creative-thumb">
@@ -795,7 +797,7 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
-              <div class="creative-badge" style="background:${badgeColor}">${badgeVal}</div>
+              ${showBadge ? `<div class="creative-badge" style="background:${badgeColor}">${roas.toFixed(1)}x</div>` : ''}
             </div>
             <div class="creative-meta">
               <div class="creative-name" title="${c.name}">${truncate(c.name,28)}</div>
