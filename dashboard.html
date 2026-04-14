@@ -240,6 +240,36 @@
   .compare-banner { background: var(--orange-dim); border-bottom: 1px solid rgba(255,107,43,0.2); padding: 6px 24px; font-size: 11px; color: var(--orange); display: flex; align-items: center; gap: 8px; }
   .compare-banner svg { flex-shrink: 0; }
 
+  /* PDF OVERLAY */
+  .pdf-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  .pdf-modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 24px; width: 320px; }
+  .pdf-modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .pdf-modal-sub { font-size: 12px; color: var(--text3); margin-bottom: 18px; }
+  .pdf-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid var(--border); margin-bottom: 8px; transition: border-color 0.15s; }
+  .pdf-option:hover { border-color: var(--border2); background: var(--bg3); }
+  .pdf-option input[type=checkbox] { accent-color: var(--orange); width: 14px; height: 14px; }
+  .pdf-option-label { font-size: 13px; }
+  .pdf-option-sub { font-size: 11px; color: var(--text3); }
+
+  /* PRINT STYLES */
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: #0E0F11 !important; color: #F0EDE8 !important; }
+    .sidebar, .topbar, .platform-tabs, .sidebar-toggle, #compare-banner, .pdf-overlay { display: none !important; }
+    .main { margin-left: 0 !important; }
+    .content { padding: 0 !important; }
+    .print-header { display: block !important; }
+    .metric-card, .chart-card, .insights-card, .table-card, .table-card { break-inside: avoid; }
+    .charts-row { grid-template-columns: 1fr 1fr !important; }
+    canvas { max-width: 100% !important; }
+    @page { margin: 14mm; size: A4; }
+  }
+
+  .print-header { display: none; padding: 16px 24px 0; }
+  .print-header-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; }
+  .print-header-logo span { color: #FF6B2B; }
+  .print-header-meta { font-size: 12px; color: #8A8784; margin-top: 3px; }
+
   /* CREATIVES */
   .creative-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 14px; }
   .creative-card { background: var(--bg3); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); transition: border-color 0.15s; }
@@ -348,6 +378,10 @@
       <button class="period-btn" onclick="setPreset('last_year',this)">Last yr</button>
       <button class="period-btn" id="btn-custom" onclick="toggleDatePicker()">Custom ▾</button>
       <button class="period-btn" id="btn-compare" onclick="toggleCompare()" title="Compare to previous period" style="display:none">vs prev</button>
+      <button class="period-btn" id="btn-pdf" onclick="exportPDF()" style="display:none;border-color:var(--border3);gap:4px;display:none;" title="Download PDF report">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:3px"><path d="M2 2h5l3 3v6H2V2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M7 2v3h3M4 7h4M4 9h2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        PDF
+      </button>
     </div>
   </div>
 
@@ -397,6 +431,11 @@
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#E60023"/><path d="M8 2C4.7 2 2 4.7 2 8c0 2.5 1.5 4.6 3.6 5.6-.05-.4-.1-1 0-1.4l.7-2.8s-.2-.4-.2-1c0-1 .6-1.7 1.3-1.7.6 0 .9.5.9 1 0 .6-.4 1.5-.6 2.3-.2.7.3 1.3 1 1.3 1.2 0 2-1.3 2-3 0-1.6-1.1-2.7-2.7-2.7-1.9 0-3 1.4-3 2.9 0 .6.2 1.2.5 1.5.05.07.06.13.04.2l-.2.8c-.03.1-.1.13-.2.1C4.3 10.3 3.7 9.2 3.7 8c0-2.3 1.7-4.4 4.9-4.4 2.6 0 4.6 1.8 4.6 4.2 0 2.5-1.6 4.6-3.8 4.6-.7 0-1.4-.4-1.6-.8l-.45 1.7c-.16.6-.6 1.4-.9 1.9.7.2 1.4.3 2.05.3 3.3 0 6-2.7 6-6s-2.7-6-6-6z" fill="white"/></svg>
       Pinterest
     </button>
+  </div>
+
+  <div class="print-header" id="print-header">
+    <div class="print-header-logo">SM<span>Pro</span></div>
+    <div class="print-header-meta" id="print-header-meta"></div>
   </div>
 
   <div class="content" id="content">
@@ -453,6 +492,112 @@ let state = {
 
 if (state.apiKey) document.getElementById('api-key-input').value = state.apiKey;
 
+// ─── PDF EXPORT ────────────────────────────────────────────
+function exportPDF() {
+  // Show modal for export options
+  const existing = document.getElementById('pdf-overlay');
+  if (existing) existing.remove();
+
+  const clientName = document.getElementById('topbar-title').textContent;
+  const platform = state.platform.charAt(0).toUpperCase() + state.platform.slice(1);
+  const periodLabel = state.dateFrom
+    ? `${formatDateShort(state.dateFrom)} – ${formatDateShort(state.dateTo)}`
+    : state.period?.replace('last_','Last ').replace('this_month','MTD').replace('last_1m','Last month').replace('last_3m','Last 3 months').replace('last_year','Last year') || 'Custom';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pdf-overlay';
+  overlay.className = 'pdf-overlay';
+  overlay.innerHTML = `
+    <div class="pdf-modal">
+      <div class="pdf-modal-title">Export PDF Report</div>
+      <div class="pdf-modal-sub">${clientName} · ${platform} · ${periodLabel}</div>
+
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;">Include in report</div>
+
+      <label class="pdf-option">
+        <input type="checkbox" id="pdf-inc-metrics" checked>
+        <div><div class="pdf-option-label">Key metrics</div><div class="pdf-option-sub">Spend, revenue, ROAS, CTR and all headline numbers</div></div>
+      </label>
+      <label class="pdf-option">
+        <input type="checkbox" id="pdf-inc-charts" checked>
+        <div><div class="pdf-option-label">Charts</div><div class="pdf-option-sub">Spend vs revenue and daily ROAS trend</div></div>
+      </label>
+      <label class="pdf-option">
+        <input type="checkbox" id="pdf-inc-insights" checked>
+        <div><div class="pdf-option-label">Key insights</div><div class="pdf-option-sub">Automated performance flags and recommendations</div></div>
+      </label>
+      <label class="pdf-option">
+        <input type="checkbox" id="pdf-inc-campaigns" checked>
+        <div><div class="pdf-option-label">Campaign breakdown</div><div class="pdf-option-sub">Per-campaign spend, ROAS, CPA and CTR</div></div>
+      </label>
+      <label class="pdf-option">
+        <input type="checkbox" id="pdf-inc-creatives">
+        <div><div class="pdf-option-label">Creative performance</div><div class="pdf-option-sub">Ad thumbnails and metrics (may be slow to print)</div></div>
+      </label>
+
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button onclick="doPrint()" style="flex:1;background:var(--orange);color:#fff;border:none;border-radius:var(--radius-sm);padding:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;">Download PDF</button>
+        <button onclick="document.getElementById('pdf-overlay').remove()" style="padding:9px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:none;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function doPrint() {
+  const clientName = document.getElementById('topbar-title').textContent;
+  const platform = state.platform.charAt(0).toUpperCase() + state.platform.slice(1);
+  const periodLabel = state.dateFrom
+    ? `${formatDateShort(state.dateFrom)} – ${formatDateShort(state.dateTo)}`
+    : state.period?.replace('last_','Last ').replace('this_month','MTD').replace('last_1m','Last month').replace('last_3m','Last 3 months').replace('last_year','Last year') || 'Custom';
+
+  // Update print header
+  document.getElementById('print-header-meta').textContent =
+    `${platform} Ads · ${periodLabel} · Generated ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}`;
+
+  // Apply section visibility based on checkboxes
+  const incMetrics = document.getElementById('pdf-inc-metrics').checked;
+  const incCharts = document.getElementById('pdf-inc-charts').checked;
+  const incInsights = document.getElementById('pdf-inc-insights').checked;
+  const incCampaigns = document.getElementById('pdf-inc-campaigns').checked;
+  const incCreatives = document.getElementById('pdf-inc-creatives').checked;
+
+  const content = document.getElementById('content');
+  const metricsGrid = content.querySelector('.metrics-grid');
+  const chartsRow = content.querySelector('.charts-row');
+  const insightsCard = content.querySelector('.insights-card');
+  const tablecards = content.querySelectorAll('.table-card');
+  const creativeCard = content.querySelector('.creative-grid')?.closest('.table-card');
+
+  if (metricsGrid) metricsGrid.dataset.pdfHide = !incMetrics;
+  if (chartsRow) chartsRow.dataset.pdfHide = !incCharts;
+  if (insightsCard) insightsCard.dataset.pdfHide = !incInsights;
+  tablecards.forEach(tc => {
+    if (tc === creativeCard) {
+      tc.dataset.pdfHide = !incCreatives;
+    } else {
+      tc.dataset.pdfHide = !incCampaigns;
+    }
+  });
+
+  // Hide elements marked for exclusion
+  const toHide = content.querySelectorAll('[data-pdf-hide="true"]');
+  toHide.forEach(el => el.style.display = 'none');
+
+  document.getElementById('pdf-overlay').remove();
+
+  // Set document title for the PDF filename
+  document.title = `${clientName} – ${platform} Report – ${periodLabel}`;
+
+  setTimeout(() => {
+    window.print();
+    // Restore after print
+    setTimeout(() => {
+      toHide.forEach(el => el.style.display = '');
+      document.title = 'SMPro — Client Dashboard';
+    }, 1000);
+  }, 300);
+}
+
 // ─── INIT ──────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
@@ -493,6 +638,7 @@ function selectClient(id) {
   document.getElementById('live-badge').style.display = 'flex';
   document.getElementById('platform-tabs').style.display = 'flex';
   document.getElementById('btn-compare').style.display = '';
+  document.getElementById('btn-pdf').style.display = '';
 
   // Show relevant platform tabs
   const hasPinterest = Object.values(CLIENTS.pinterest).includes(id);
