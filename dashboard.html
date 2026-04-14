@@ -277,7 +277,7 @@
 
 <script>
   // Password gate — runs before anything else
-  const DASHBOARD_PASSWORD = 'Backlinks20008';
+  const DASHBOARD_PASSWORD = 'smp2026!';
   function checkPassword() {
     const val = document.getElementById('gate-password').value;
     if (val === DASHBOARD_PASSWORD) {
@@ -543,16 +543,16 @@ async function loadData() {
     const isLeadGen = LEAD_GEN_CLIENTS.includes(accountId);
 
     const fields = isLeadGen
-      ? ['date','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead','cost_per_action_type_offsite_conversion_fb_pixel_purchase','actions_landing_page_view']
-      : ['date','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+      ? ['date','account_id','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead','cost_per_action_type_offsite_conversion_fb_pixel_purchase','actions_landing_page_view']
+      : ['date','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const campFields = isLeadGen
-      ? ['campaign','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
-      : ['campaign','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+      ? ['campaign','account_id','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
+      : ['campaign','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const creativeFields = isLeadGen
-      ? ['ad_name','ad_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url']
-      : ['ad_name','ad_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'];
+      ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url']
+      : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period),
@@ -595,9 +595,29 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const cpa = !isLeadGen && totalOrders > 0 ? totalSpend / totalOrders : 0;
   const aov = !isLeadGen && totalOrders > 0 ? totalRev / totalOrders : 0;
 
-  const sorted = [...active].sort((a,b)=>a.date.localeCompare(b.date));
+  // Deduplicate rows by date for charting — Windsor may return multiple rows per date
+  const byDate = {};
+  active.forEach(r => {
+    const d = r.date;
+    if (!byDate[d]) byDate[d] = { date:d, spend:0, impressions:0, clicks:0, reach:0,
+      action_values_offsite_conversion_fb_pixel_purchase:0, actions_purchase:0,
+      total_checkout_value:0, total_checkout:0,
+      actions_offsite_conversion_fb_pixel_lead:0, actions_landing_page_view:0 };
+    byDate[d].spend += parseFloat(r.spend||0);
+    byDate[d].impressions += parseFloat(r.impressions||0);
+    byDate[d].clicks += parseFloat(r.clicks||0);
+    byDate[d].reach += parseFloat(r.reach||0);
+    byDate[d].action_values_offsite_conversion_fb_pixel_purchase += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+    byDate[d].actions_purchase += parseFloat(r.actions_purchase||0);
+    byDate[d].total_checkout_value += parseFloat(r.total_checkout_value||0);
+    byDate[d].total_checkout += parseFloat(r.total_checkout||0);
+    byDate[d].actions_offsite_conversion_fb_pixel_lead += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+    byDate[d].actions_landing_page_view += parseFloat(r.actions_landing_page_view||0);
+  });
+  const sorted = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
+
   const labels = sorted.map(r => formatDate(r.date));
-  const spendData = sorted.map(r => +parseFloat(r.spend||0).toFixed(2));
+  const spendData = sorted.map(r => +r.spend.toFixed(2));
   const primaryData = isLeadGen
     ? sorted.map(r => parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0))
     : sorted.map(r => +parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0).toFixed(2));
