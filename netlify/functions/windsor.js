@@ -16,12 +16,14 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { api_key, connector, date_preset, fields, account_id, options } = JSON.parse(event.body);
+    const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options } = JSON.parse(event.body);
 
     const params = new URLSearchParams();
     params.append('api_key', api_key);
     params.append('fields', fields);
     if (date_preset) params.append('date_preset', date_preset);
+    if (date_from) params.append('date_from', date_from);
+    if (date_to) params.append('date_to', date_to);
 
     // Pass account_id both as direct param and as filter for maximum compatibility
     if (account_id) {
