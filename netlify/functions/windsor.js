@@ -23,17 +23,17 @@ exports.handler = async function(event) {
     params.append('fields', fields);
     if (date_preset) params.append('date_preset', date_preset);
 
+    // Pass account_id both as direct param and as filter for maximum compatibility
     if (account_id) {
-      params.append('filter', JSON.stringify([['account_id', 'eq', account_id]]));
+      params.append('account_id', account_id);
+      params.append('filter', JSON.stringify([['accountid', 'eq', account_id]]));
     }
 
-    // Forward connector-specific options e.g. attribution_window, conversion_report_time
     if (options && typeof options === 'object') {
       Object.entries(options).forEach(([k, v]) => params.append(k, v));
     }
 
     const url = `https://connectors.windsor.ai/${connector}?${params}`;
-
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -45,7 +45,18 @@ exports.handler = async function(event) {
       };
     }
 
-    const data = await response.json();
+    let data = await response.json();
+
+    // Safety net — filter by account_id client-side in case Windsor returns mixed accounts
+    if (account_id && Array.isArray(data)) {
+      const filtered = data.filter(r => {
+        const rid = String(r.account_id || r.accountid || '');
+        return rid === '' || rid === String(account_id);
+      });
+      // Only apply filter if it doesn't remove everything (i.e. account_id field exists)
+      const hasAccountField = data.some(r => r.account_id || r.accountid);
+      data = hasAccountField ? filtered : data;
+    }
 
     return {
       statusCode: 200,
