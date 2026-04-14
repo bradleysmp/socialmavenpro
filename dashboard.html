@@ -237,8 +237,8 @@
     .main { margin-left: 0; }
   }
 
-  .fade-in { animation: fadeIn 0.3s ease forwards; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .compare-banner { background: var(--orange-dim); border-bottom: 1px solid rgba(255,107,43,0.2); padding: 6px 24px; font-size: 11px; color: var(--orange); display: flex; align-items: center; gap: 8px; }
+  .compare-banner svg { flex-shrink: 0; }
 
   /* CREATIVES */
   .creative-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 14px; }
@@ -277,7 +277,7 @@
 
 <script>
   // Password gate — runs before anything else
-  const DASHBOARD_PASSWORD = 'Backlinks20008';
+  const DASHBOARD_PASSWORD = 'smp2026!';
   function checkPassword() {
     const val = document.getElementById('gate-password').value;
     if (val === DASHBOARD_PASSWORD) {
@@ -340,10 +340,47 @@
       </div>
     </div>
     <div class="topbar-right">
-      <button class="period-btn active" onclick="setPeriod('last_7d',this)">7d</button>
-      <button class="period-btn" onclick="setPeriod('last_30d',this)">30d</button>
-      <button class="period-btn" onclick="setPeriod('this_month',this)">MTD</button>
-      <button class="period-btn" onclick="setPeriod('last_1m',this)">Last mo</button>
+      <button class="period-btn active" onclick="setPreset('last_7d',this)">7d</button>
+      <button class="period-btn" onclick="setPreset('last_30d',this)">30d</button>
+      <button class="period-btn" onclick="setPreset('this_month',this)">MTD</button>
+      <button class="period-btn" onclick="setPreset('last_1m',this)">Last mo</button>
+      <button class="period-btn" onclick="setPreset('last_3m',this)">3mo</button>
+      <button class="period-btn" onclick="setPreset('last_year',this)">Last yr</button>
+      <button class="period-btn" id="btn-custom" onclick="toggleDatePicker()">Custom ▾</button>
+      <button class="period-btn" id="btn-compare" onclick="toggleCompare()" title="Compare to previous period" style="display:none">vs prev</button>
+    </div>
+  </div>
+
+  <!-- DATE PICKER DROPDOWN -->
+  <div id="compare-banner" style="display:none" class="compare-banner">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6 1l5 5-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span id="compare-banner-text"></span>
+    <button onclick="setCompareMode(null)" style="margin-left:auto;background:none;border:none;color:var(--orange);cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif;opacity:0.7;">✕ Remove</button>
+  </div>
+
+  <!-- DATE PICKER DROPDOWN -->
+  <div id="date-picker" style="display:none;position:fixed;top:56px;right:16px;z-index:500;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;">Custom date range</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">From</div>
+        <input type="date" id="date-from" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 8px;outline:none;box-sizing:border-box;" />
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">To</div>
+        <input type="date" id="date-to" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 8px;outline:none;box-sizing:border-box;" />
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;">Quick select</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;" id="quick-btns"></div>
+    <button onclick="applyCustomDates()" style="width:100%;background:var(--orange);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;">Apply dates</button>
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;">Compare to</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="setCompareMode('prev_period')" id="cmp-prev" style="flex:1;font-size:11px;padding:5px 8px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;">Previous period</button>
+        <button onclick="setCompareMode('prev_year')" id="cmp-year" style="flex:1;font-size:11px;padding:5px 8px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;">Same period last year</button>
+        <button onclick="setCompareMode(null)" id="cmp-none" style="flex:1;font-size:11px;padding:5px 8px;border-radius:4px;border:1px solid var(--orange);background:var(--orange-dim);color:var(--orange);cursor:pointer;font-family:'DM Sans',sans-serif;">No compare</button>
+      </div>
     </div>
   </div>
 
@@ -407,6 +444,9 @@ let state = {
   client: null,
   platform: 'facebook',
   period: 'last_7d',
+  dateFrom: null,
+  dateTo: null,
+  compareMode: null, // 'prev_period' | 'prev_year' | null
   cache: {},
   charts: {}
 };
@@ -452,6 +492,7 @@ function selectClient(id) {
   document.getElementById('topbar-title').textContent = name;
   document.getElementById('live-badge').style.display = 'flex';
   document.getElementById('platform-tabs').style.display = 'flex';
+  document.getElementById('btn-compare').style.display = '';
 
   // Show relevant platform tabs
   const hasPinterest = Object.values(CLIENTS.pinterest).includes(id);
@@ -466,12 +507,157 @@ function selectClient(id) {
 }
 
 // ─── PERIOD / PLATFORM ────────────────────────────────────
-function setPeriod(period, btn) {
+function setPreset(period, btn) {
   state.period = period;
+  state.dateFrom = null;
+  state.dateTo = null;
   document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  document.getElementById('btn-compare').style.display = '';
+  document.getElementById('date-picker').style.display = 'none';
   if (state.client) loadData();
 }
+
+// Keep old name as alias for compatibility
+function setPeriod(period, btn) { setPreset(period, btn); }
+
+function toggleDatePicker() {
+  const dp = document.getElementById('date-picker');
+  dp.style.display = dp.style.display === 'none' ? 'block' : 'none';
+  if (dp.style.display === 'block') buildQuickBtns();
+}
+
+function buildQuickBtns() {
+  const now = new Date();
+  const yr = now.getFullYear();
+  const presets = [
+    [`Q1 ${yr-1}`, `${yr-1}-01-01`, `${yr-1}-03-31`],
+    [`Q2 ${yr-1}`, `${yr-1}-04-01`, `${yr-1}-06-30`],
+    [`Q3 ${yr-1}`, `${yr-1}-07-01`, `${yr-1}-09-30`],
+    [`Q4 ${yr-1}`, `${yr-1}-10-01`, `${yr-1}-12-31`],
+    [`Full ${yr-1}`, `${yr-1}-01-01`, `${yr-1}-12-31`],
+    [`Q1 ${yr}`, `${yr}-01-01`, `${yr}-03-31`],
+    [`Jan ${yr}`, `${yr}-01-01`, `${yr}-01-31`],
+    [`Feb ${yr}`, `${yr}-02-01`, `${yr}-02-28`],
+    [`Mar ${yr}`, `${yr}-03-01`, `${yr}-03-31`],
+    [`Apr ${yr}`, `${yr}-04-01`, `${yr}-04-30`],
+  ];
+  document.getElementById('quick-btns').innerHTML = presets.map(([label,from,to]) =>
+    `<button onclick="setCustomQuick('${from}','${to}')" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;">${label}</button>`
+  ).join('');
+}
+
+function setCustomQuick(from, to) {
+  document.getElementById('date-from').value = from;
+  document.getElementById('date-to').value = to;
+}
+
+function applyCustomDates() {
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  if (!from || !to) return;
+  state.period = null;
+  state.dateFrom = from;
+  state.dateTo = to;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-custom').classList.add('active');
+  document.getElementById('btn-custom').textContent = `${formatDateShort(from)} – ${formatDateShort(to)} ▾`;
+  document.getElementById('btn-compare').style.display = '';
+  document.getElementById('date-picker').style.display = 'none';
+  if (state.client) loadData();
+}
+
+function toggleCompare() {
+  const dp = document.getElementById('date-picker');
+  dp.style.display = dp.style.display === 'none' ? 'block' : 'none';
+  if (dp.style.display === 'block') buildQuickBtns();
+}
+
+function setCompareMode(mode) {
+  state.compareMode = mode;
+  state.cache = {};
+  ['cmp-prev','cmp-year','cmp-none'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.background = 'var(--bg3)';
+    el.style.borderColor = 'var(--border2)';
+    el.style.color = 'var(--text2)';
+  });
+  const activeId = mode === 'prev_period' ? 'cmp-prev' : mode === 'prev_year' ? 'cmp-year' : 'cmp-none';
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) {
+    activeEl.style.background = 'var(--orange-dim)';
+    activeEl.style.borderColor = 'var(--orange)';
+    activeEl.style.color = 'var(--orange)';
+  }
+  const btn = document.getElementById('btn-compare');
+  btn.style.background = mode ? 'var(--orange-dim)' : '';
+  btn.style.borderColor = mode ? 'var(--orange)' : '';
+  btn.style.color = mode ? 'var(--orange)' : '';
+
+  // Update compare banner
+  const banner = document.getElementById('compare-banner');
+  const bannerText = document.getElementById('compare-banner-text');
+  if (mode && banner) {
+    const cd = getCompareDates();
+    const label = mode === 'prev_year' ? 'Same period last year' : 'Previous period';
+    bannerText.textContent = `Comparing to ${label}${cd ? ': '+formatDateShort(cd.from)+' – '+formatDateShort(cd.to) : ''}. Dashed lines on charts show comparison period.`;
+    banner.style.display = 'flex';
+  } else if (banner) {
+    banner.style.display = 'none';
+  }
+
+  document.getElementById('date-picker').style.display = 'none';
+  if (state.client) loadData();
+}
+
+function formatDateShort(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'2-digit'});
+}
+
+function getCompareDates() {
+  if (!state.compareMode) return null;
+  let from, to;
+  if (state.dateFrom && state.dateTo) {
+    from = new Date(state.dateFrom + 'T00:00:00');
+    to = new Date(state.dateTo + 'T00:00:00');
+  } else {
+    const preset = state.period;
+    const now = new Date();
+    if (preset === 'last_7d') { to = new Date(now); to.setDate(to.getDate()-1); from = new Date(to); from.setDate(from.getDate()-6); }
+    else if (preset === 'last_30d') { to = new Date(now); to.setDate(to.getDate()-1); from = new Date(to); from.setDate(from.getDate()-29); }
+    else if (preset === 'this_month') { from = new Date(now.getFullYear(),now.getMonth(),1); to = new Date(now); }
+    else if (preset === 'last_1m') { const lm = new Date(now.getFullYear(),now.getMonth()-1,1); from = lm; to = new Date(now.getFullYear(),now.getMonth(),0); }
+    else if (preset === 'last_3m') { to = new Date(now); to.setDate(to.getDate()-1); from = new Date(to); from.setDate(from.getDate()-89); }
+    else if (preset === 'last_year') { from = new Date(now.getFullYear()-1,now.getMonth(),now.getDate()); to = new Date(now); to.setDate(to.getDate()-1); }
+    else return null;
+  }
+  const dayDiff = Math.round((to - from) / 86400000);
+  let cFrom, cTo;
+  if (state.compareMode === 'prev_period') {
+    cTo = new Date(from); cTo.setDate(cTo.getDate()-1);
+    cFrom = new Date(cTo); cFrom.setDate(cFrom.getDate()-dayDiff);
+  } else {
+    cFrom = new Date(from); cFrom.setFullYear(cFrom.getFullYear()-1);
+    cTo = new Date(to); cTo.setFullYear(cTo.getFullYear()-1);
+  }
+  return {
+    from: cFrom.toISOString().split('T')[0],
+    to: cTo.toISOString().split('T')[0]
+  };
+}
+
+// Close date picker when clicking outside
+document.addEventListener('click', e => {
+  const dp = document.getElementById('date-picker');
+  if (dp && dp.style.display !== 'none') {
+    if (!dp.contains(e.target) && !document.getElementById('btn-custom').contains(e.target) && !document.getElementById('btn-compare').contains(e.target)) {
+      dp.style.display = 'none';
+    }
+  }
+});
 
 function setPlatform(platform, btn) {
   state.platform = platform;
@@ -481,8 +667,8 @@ function setPlatform(platform, btn) {
 }
 
 // ─── WINDSOR FETCH ─────────────────────────────────────────
-async function fetchWindsor(connector, accountId, fields, datePreset, options = {}) {
-  const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}_${JSON.stringify(options)}`;
+async function fetchWindsor(connector, accountId, fields, datePreset, options = {}, dateFrom = null, dateTo = null) {
+  const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}_${JSON.stringify(options)}`;
   if (state.cache[cacheKey]) return state.cache[cacheKey];
 
   const res = await fetch('/.netlify/functions/windsor', {
@@ -492,6 +678,8 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
       api_key: state.apiKey,
       connector,
       date_preset: datePreset,
+      date_from: dateFrom,
+      date_to: dateTo,
       fields: fields.join(','),
       account_id: accountId,
       options,
@@ -555,19 +743,26 @@ async function loadData() {
       : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
-      fetchWindsor(connector, accountId, fields, state.period),
-      fetchWindsor(connector, accountId, campFields, state.period),
-      fetchWindsor(connector, accountId, creativeFields, state.period),
+      fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo),
+      fetchWindsor(connector, accountId, campFields, state.period, {}, state.dateFrom, state.dateTo),
+      fetchWindsor(connector, accountId, creativeFields, state.period, {}, state.dateFrom, state.dateTo),
     ]);
 
-    renderDashboard(rows, campRows, creativeRows, connector, [], isLeadGen);
+    // Fetch comparison period if enabled
+    let compareRows = [];
+    const compareDates = getCompareDates();
+    if (compareDates) {
+      compareRows = await fetchWindsor(connector, accountId, fields, null, {}, compareDates.from, compareDates.to);
+    }
+
+    renderDashboard(rows, campRows, creativeRows, connector, [], isLeadGen, compareRows, compareDates);
   } catch(e) {
     showError('Could not load data. Check your API key or try refreshing. ' + e.message);
   }
 }
 
 // ─── RENDER ────────────────────────────────────────────────
-function renderDashboard(rows, campRows, creativeRows, connector, organicRows = [], isLeadGen = false) {
+function renderDashboard(rows, campRows, creativeRows, connector, organicRows = [], isLeadGen = false, compareRows = [], compareDates = null) {
   const active = rows.filter(r => parseFloat(r.spend||0) > 0);
   if (!active.length) { showError('No data found for this period.'); return; }
 
@@ -595,7 +790,29 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const cpa = !isLeadGen && totalOrders > 0 ? totalSpend / totalOrders : 0;
   const aov = !isLeadGen && totalOrders > 0 ? totalRev / totalOrders : 0;
 
-  // Deduplicate rows by date for charting — Windsor may return multiple rows per date
+  // Comparison period metrics
+  const hasCompare = compareRows && compareRows.length > 0;
+  const cmpActive = hasCompare ? compareRows.filter(r => parseFloat(r.spend||0) > 0) : [];
+  const cmpSpend = hasCompare ? sum(cmpActive, 'spend') : 0;
+  const cmpRev = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'action_values_offsite_conversion_fb_pixel_purchase') : sum(cmpActive,'total_checkout_value')) : 0) : 0;
+  const cmpOrders = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'actions_purchase') : sum(cmpActive,'total_checkout')) : 0) : 0;
+  const cmpLeads = hasCompare && isLeadGen ? sum(cmpActive,'actions_offsite_conversion_fb_pixel_lead') : 0;
+  const cmpRoas = cmpSpend > 0 && cmpRev > 0 ? cmpRev/cmpSpend : 0;
+  const cmpCpl = cmpSpend > 0 && cmpLeads > 0 ? cmpSpend/cmpLeads : 0;
+  const cmpImpr = hasCompare ? sum(cmpActive,'impressions') : 0;
+  const cmpClicks = hasCompare ? sum(cmpActive,'clicks') : 0;
+  const cmpCtr = cmpImpr > 0 ? (cmpClicks/cmpImpr*100) : 0;
+  const cmpCpm = cmpImpr > 0 ? (cmpSpend/cmpImpr*1000) : 0;
+
+  function delta(current, previous, invert = false) {
+    if (!hasCompare || !previous) return '';
+    const pct = ((current - previous) / previous * 100);
+    const up = pct >= 0;
+    const good = invert ? !up : up;
+    const color = good ? 'var(--green)' : 'var(--red)';
+    const arrow = up ? '▲' : '▼';
+    return `<div style="font-size:10px;color:${color};margin-top:2px;">${arrow} ${Math.abs(pct).toFixed(1)}% vs ${compareDates ? formatDateShort(compareDates.from)+'–'+formatDateShort(compareDates.to) : 'prev'}</div>`;
+  }
   const byDate = {};
   active.forEach(r => {
     const d = r.date;
@@ -643,26 +860,26 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
 
   const metricsHTML = isLeadGen ? `
     <div class="metrics-grid">
-      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
-      ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)')}
-      ${metricCard('Cost Per Lead', fmt(cpl), 'CPL', cpl > 0 && cpl < 15 ? 'var(--green)' : cpl < 30 ? 'var(--amber)' : 'var(--red)')}
-      ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, '')}
-      ${metricCard('Cost Per Purchase', fmt(cpp), 'oven jobs/bookings', '')}
-      ${metricCard('Landing Page Views', totalLPV.toLocaleString(), `${leadRate.toFixed(1)}% lead rate`, '')}
-      ${metricCard('Click → Lead', clickToLead.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '')}
-      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '')}
-      ${metricCard('CTR', ctr.toFixed(2)+'%', `Freq. ${avgFreq.toFixed(2)}`, '')}
-      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', 'unique people', '')}
+      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
+      ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)', delta(totalLeads, cmpLeads, false))}
+      ${metricCard('Cost Per Lead', fmt(cpl), 'CPL', cpl > 0 && cpl < 15 ? 'var(--green)' : cpl < 30 ? 'var(--amber)' : 'var(--red)', delta(cpl, cmpCpl, true))}
+      ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, '', '')}
+      ${metricCard('Cost Per Purchase', fmt(cpp), 'oven jobs/bookings', '', '')}
+      ${metricCard('Landing Page Views', totalLPV.toLocaleString(), `${leadRate.toFixed(1)}% lead rate`, '', '')}
+      ${metricCard('Click → Lead', clickToLead.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '', '')}
+      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '', delta(avgCpm, cmpCpm, true))}
+      ${metricCard('CTR', ctr.toFixed(2)+'%', `Freq. ${avgFreq.toFixed(2)}`, '', delta(ctr, cmpCtr, false))}
+      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', 'unique people', '', '')}
     </div>` : `
     <div class="metrics-grid">
-      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '')}
-      ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '')}
-      ${metricCard('ROAS', roas.toFixed(2)+'x', 'Meta attributed', roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)')}
-      ${metricCard('CPA', fmt(cpa), `AOV ${fmt(aov)}`, '')}
-      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '')}
-      ${metricCard('CTR', ctr.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '')}
-      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '')}
-      ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '')}
+      ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
+      ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '', delta(totalRev, cmpRev, false))}
+      ${metricCard('ROAS', roas.toFixed(2)+'x', 'Meta attributed', roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)', delta(roas, cmpRoas, false))}
+      ${metricCard('CPA', fmt(cpa), `AOV ${fmt(aov)}`, '', delta(cpa, cmpSpend > 0 && cmpOrders > 0 ? cmpSpend/cmpOrders : 0, true))}
+      ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '', delta(avgCpm, cmpCpm, true))}
+      ${metricCard('CTR', ctr.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '', delta(ctr, cmpCtr, false))}
+      ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '', '')}
+      ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '', delta(totalClicks>0?totalSpend/totalClicks:0, cmpClicks>0?cmpSpend/cmpClicks:0, true))}
     </div>`;
 
   const chartLabel = isLeadGen ? 'Spend vs Leads' : (connector === 'pinterest' ? 'Spend vs Checkouts' : 'Spend vs Revenue');
@@ -834,8 +1051,28 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   </div>`;
 
   document.getElementById('content').innerHTML = html;
+
+  // Build comparison chart data if available
+  let cmpSpendData = [], cmpPrimaryData = [];
+  if (hasCompare && cmpActive.length > 0) {
+    const cmpByDate = {};
+    cmpActive.forEach(r => {
+      const d = r.date;
+      if (!cmpByDate[d]) cmpByDate[d] = { spend:0, action_values_offsite_conversion_fb_pixel_purchase:0, actions_offsite_conversion_fb_pixel_lead:0, total_checkout_value:0 };
+      cmpByDate[d].spend += parseFloat(r.spend||0);
+      cmpByDate[d].action_values_offsite_conversion_fb_pixel_purchase += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+      cmpByDate[d].actions_offsite_conversion_fb_pixel_lead += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+      cmpByDate[d].total_checkout_value += parseFloat(r.total_checkout_value||0);
+    });
+    const cmpSorted = Object.values(cmpByDate).sort((a,b)=>a.date?.localeCompare(b.date)||0);
+    cmpSpendData = cmpSorted.map(r => +r.spend.toFixed(2));
+    cmpPrimaryData = isLeadGen
+      ? cmpSorted.map(r => parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0))
+      : cmpSorted.map(r => +parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0).toFixed(2));
+  }
+
   setTimeout(() => {
-    renderSpendRevChart(labels, spendData, primaryData, secondaryData, isLeadGen);
+    renderSpendRevChart(labels, spendData, primaryData, secondaryData, isLeadGen, cmpSpendData, cmpPrimaryData);
     renderROASChart(labels, roasData, isLeadGen);
   }, 50);
 }
@@ -846,15 +1083,21 @@ function destroyCharts() {
   state.charts = {};
 }
 
-function renderSpendRevChart(labels, spend, primary, secondary, isLeadGen) {
+function renderSpendRevChart(labels, spend, primary, secondary, isLeadGen, cmpSpend = [], cmpPrimary = []) {
   const ctx = document.getElementById('chart-sr');
   if (!ctx) return;
   const datasets = [
-    { label: 'Spend', data: spend, backgroundColor: '#FF6B2B55', borderColor: '#FF6B2B', borderWidth: 1, borderRadius: 2, order: 3, type: 'bar' },
+    { label: 'Spend', data: spend, backgroundColor: '#FF6B2B55', borderColor: '#FF6B2B', borderWidth: 1, borderRadius: 2, order: 4, type: 'bar' },
     { label: isLeadGen ? 'Leads' : 'Revenue', data: primary, type: 'line', borderColor: '#1D9E75', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 1, yAxisID: isLeadGen ? 'y2' : 'y' },
   ];
   if (isLeadGen && secondary) {
     datasets.push({ label: 'Purchases', data: secondary, type: 'line', borderColor: '#378ADD', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 2, yAxisID: 'y2' });
+  }
+  if (cmpPrimary && cmpPrimary.length > 0) {
+    datasets.push({ label: 'Prev ' + (isLeadGen ? 'Leads' : 'Revenue'), data: cmpPrimary, type: 'line', borderColor: '#1D9E7566', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,3], order: 3, yAxisID: isLeadGen ? 'y2' : 'y' });
+  }
+  if (cmpSpend && cmpSpend.length > 0) {
+    datasets.push({ label: 'Prev Spend', data: cmpSpend, backgroundColor: '#FF6B2B22', borderColor: '#FF6B2B44', borderWidth: 0, borderRadius: 2, order: 5, type: 'bar' });
   }
   const scales = {
     x: { ticks: { font:{size:9}, color:'#5A5856', maxTicksLimit:10, autoSkip:true }, grid: { display:false }, border:{color:'#222'} },
@@ -908,11 +1151,12 @@ function formatDate(d) {
 
 function truncate(s, n) { return s && s.length > n ? s.slice(0,n)+'…' : s; }
 
-function metricCard(label, val, sub, color) {
+function metricCard(label, val, sub, color, deltaHTML = '') {
   return `<div class="metric-card">
     <div class="metric-label">${label}</div>
     <div class="metric-val"${color?` style="color:${color}"`:''}>${val}</div>
     <div class="metric-delta delta-neutral">${sub}</div>
+    ${deltaHTML}
   </div>`;
 }
 
