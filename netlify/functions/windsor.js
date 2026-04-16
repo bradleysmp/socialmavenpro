@@ -25,10 +25,15 @@ exports.handler = async function(event) {
     if (date_from) params.append('date_from', date_from);
     if (date_to) params.append('date_to', date_to);
 
-    // Pass account_id both as direct param and as filter for maximum compatibility
+    // Connectors that support account_id filtering via filter param
+    const filterableConnectors = ['facebook', 'pinterest', 'tiktok', 'google_ads'];
+    const supportsFilter = filterableConnectors.some(c => connector.startsWith(c));
+
     if (account_id) {
       params.append('account_id', account_id);
-      params.append('filter', JSON.stringify([['accountid', 'eq', account_id]]));
+      if (supportsFilter) {
+        params.append('filter', JSON.stringify([['accountid', 'eq', account_id]]));
+      }
     }
 
     if (options && typeof options === 'object') {
