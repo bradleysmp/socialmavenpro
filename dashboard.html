@@ -1645,6 +1645,8 @@ function filterDPA(query) {
   const tbody = document.getElementById('dpa-tbody');
   if (tbody) tbody.innerHTML = renderDPARows(filtered);
 }
+
+function showLoading() {
   document.getElementById('content').innerHTML = `
     <div class="state-box">
       <div class="spinner"></div>
