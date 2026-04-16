@@ -1493,29 +1493,46 @@ function renderDPA(metaRows, ga4Rows) {
     const gaRevenue   = parseFloat(ga.item_revenue||0);
 
     // Hero Score — composite of GA conversion signals + Meta efficiency
-    // Higher is better: high PTV, high CTV, high CTR, reasonable CPC
     const heroScore = Math.min(100, Math.round(
-      (ptv * 2) +        // purchase-to-view rate weighted heavily
-      (ctv * 1) +        // cart-to-view rate
-      (ctr * 5) +        // Meta CTR
-      (gaPurchases > 0 ? 10 : 0) +  // bonus for actual GA purchases
-      (atc > 10 ? 5 : 0)            // bonus for add-to-cart volume
+      (ptv * 2.5) +                      // purchase-to-view rate — heaviest weight
+      (ctv * 0.8) +                      // cart-to-view rate
+      (ctr * 6) +                        // Meta CTR
+      (gaPurchases > 0 ? 12 : 0) +       // confirmed GA purchases bonus
+      (gaPurchases > 5 ? 8 : 0) +        // high purchase volume bonus
+      (atc > 10 ? 5 : 0)                 // strong add-to-cart volume
     ));
 
-    // Sync recommendation
+    // Sync signal — derived from hero score + specific disqualifying conditions
     let syncSignal, syncColor, syncReason;
-    if (ptv >= 8 && ctv >= 20 && ctr >= 1.5) {
-      syncSignal = 'Strong sync candidate'; syncColor = 'var(--green)';
-      syncReason = 'High purchase-to-view, strong cart rate and CTR — prioritise in DPA feed';
-    } else if (m.spend > 5 && gaPurchases === 0 && ptv < 3) {
+
+    // Hard disqualifier — spending money with no conversion signal at all
+    if (m.spend > 5 && gaPurchases === 0 && ptv < 2 && ctv < 10) {
       syncSignal = 'Review or pause'; syncColor = 'var(--red)';
-      syncReason = 'Spend active but no GA purchases and low conversion rate — may be wasting DPA budget';
-    } else if (ctv >= 15 && gaPurchases === 0) {
-      syncSignal = 'Monitor'; syncColor = 'var(--amber)';
-      syncReason = 'Good cart rate but no confirmed purchases — check pixel or attribution';
-    } else {
-      syncSignal = 'Standard'; syncColor = 'var(--text3)';
-      syncReason = 'Average performance — no strong signal either way';
+      syncReason = 'Active spend but no on-site conversion signal — may be wasting DPA budget';
+    }
+    // Strong signal — high hero score
+    else if (heroScore >= 70) {
+      syncSignal = 'Strong sync candidate'; syncColor = 'var(--green)';
+      if (ptv >= 10) syncReason = `${ptv.toFixed(1)}% purchase-to-view rate — proven converter, prioritise in DPA feed`;
+      else if (ctr >= 5) syncReason = `${ctr.toFixed(2)}% CTR — exceptional ad engagement, scale impressions`;
+      else syncReason = 'Strong composite score across CTR, cart rate and purchases — prioritise in feed';
+    }
+    // Good signal — worth scaling with caveats
+    else if (heroScore >= 45) {
+      syncSignal = 'Scale with care'; syncColor = 'var(--amber)';
+      if (ctv >= 15 && gaPurchases === 0) syncReason = 'Good cart rate but purchases not confirmed — check pixel or attribution window';
+      else if (ctr >= 2) syncReason = 'Solid CTR and conversion signals — good candidate but monitor closely';
+      else syncReason = 'Decent signals — worth keeping in feed but not a priority for budget increases';
+    }
+    // Monitor — some signal but not enough to act on yet
+    else if (heroScore >= 25) {
+      syncSignal = 'Monitor'; syncColor = 'var(--text2)';
+      syncReason = 'Some positive signals but insufficient data to prioritise — revisit with more spend';
+    }
+    // Weak — no meaningful signal
+    else {
+      syncSignal = 'Low priority'; syncColor = 'var(--text3)';
+      syncReason = 'Weak conversion signals across all metrics — deprioritise in catalogue or exclude';
     }
 
     joined.push({ ...m, ga_views:views, ga_atc:atc, ga_purchases:gaPurchases, ga_revenue:gaRevenue, ptv, ctv, ctr, cpc, heroScore, syncSignal, syncColor, syncReason });
@@ -1612,7 +1629,7 @@ function renderDPARows(products) {
         <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.slug}</div>
       </td>
       <td style="padding:10px 8px;text-align:center;">
-        <div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:${p.heroScore>=70?'var(--green-bg)':p.heroScore>=40?'var(--amber-bg)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:${p.heroScore>=70?'var(--green)':p.heroScore>=40?'var(--amber)':'var(--text3)'};">${p.heroScore}</div>
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:${p.heroScore>=70?'var(--green-bg)':p.heroScore>=45?'var(--amber-bg)':p.heroScore>=25?'rgba(90,88,86,0.2)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:${p.heroScore>=70?'var(--green)':p.heroScore>=45?'var(--amber)':p.heroScore>=25?'var(--text2)':'var(--text3)'};">${p.heroScore}</div>
       </td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.spend)}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctr>=2?'var(--green)':p.ctr>=1?'var(--text2)':'var(--red)'};">${p.ctr.toFixed(2)}%</td>
