@@ -844,7 +844,10 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
     })
   });
 
-  if (!res.ok) throw new Error(`Windsor API error: ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(`Windsor API error: ${res.status} — ${errBody.detail || errBody.error || ''}`);
+  }
   const json = await res.json();
   const data = json.data || json;
   state.cache[cacheKey] = data;
