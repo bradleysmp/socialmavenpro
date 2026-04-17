@@ -424,13 +424,9 @@
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#000"/><path d="M11 3h-1.5A2.5 2.5 0 007 5.5V10a1.5 1.5 0 11-1.5-1.5v-1.6A3.1 3.1 0 105.5 13V5.5A4 4 0 009.5 9V7.4A2.5 2.5 0 0111 7.5V6a4 4 0 01-1-.5V3z" fill="white"/></svg>
       TikTok
     </button>
-    <button class="ptab" onclick="setPlatform('merchant',this)" id="tab-merchant" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#4285F4"/><path d="M8 3L5 6h2v5h2V6h2L8 3z" fill="white"/><path d="M3 12h10" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
-      Merchant
-    </button>
     <button class="ptab" onclick="setPlatform('dpa',this)" id="tab-dpa" style="display:none">
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
-      DPA
+      Products
     </button>
   </div>
 
@@ -653,8 +649,6 @@ function selectClient(id) {
   document.getElementById('btn-pdf').style.display = '';
 
   // Show relevant platform tabs
-  const hasMerchant = Object.values(CLIENTS.merchant).includes(id);
-  document.getElementById('tab-merchant').style.display = hasMerchant ? '' : 'none';
   document.getElementById('tab-tiktok').style.display = 'none';
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
@@ -866,51 +860,29 @@ async function loadData() {
     let accountId = state.client;
     let organicRows = [];
 
-    // ── GOOGLE MERCHANT CENTER ──
-    if (connector === 'merchant') {
-      const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
-      if (!merchantId) { showError('No Google Merchant Center account linked for this client.'); return; }
-      const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
-
-      const catalogueFields = [
-        'product_id','product_title','product_availability','product_price',
-        'product_brand','product_category_l1','product_condition','product_thumbnail_link'
-      ];
-      const performanceFields = ['product_id','product_clicks','product_impressions','product_ctr'];
-      const stockFields = ['product_id','product_sell_on_google_quantity'];
-
-      const fetches = [
-        fetchWindsor('google_merchant', merchantId, catalogueFields, state.period, {}, state.dateFrom, state.dateTo),
-        fetchWindsor('google_merchant', merchantId, performanceFields, state.period, {}, state.dateFrom, state.dateTo),
-        fetchWindsor('google_merchant', merchantId, stockFields, state.period, {}, state.dateFrom, state.dateTo),
-        fetchWindsor('facebook', accountId,
-          ['product_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'],
-          state.period, {}, state.dateFrom, state.dateTo),
-        ga4Id ? fetchWindsor('googleanalytics4', ga4Id,
-          ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'],
-          state.period, {}, state.dateFrom, state.dateTo) : Promise.resolve([]),
-      ];
-
-      const [merchantCatalogue, merchantPerformance, merchantStock, metaRows, ga4Rows] = await Promise.all(fetches);
-      renderMerchant(merchantCatalogue, merchantPerformance, merchantStock, metaRows, ga4Rows);
-      return;
-    }
-
-    // ── DPA ANALYSIS ──
+    // ── UNIFIED PRODUCT SCORECARD ──
     if (connector === 'dpa') {
       const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
       if (!ga4Id) { showError('No GA4 account linked for this client.'); return; }
+      const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
+      const hasMerchant = !!merchantId;
 
-      const [metaProducts, ga4Products] = await Promise.all([
-        fetchWindsor('facebook', accountId,
-          ['product_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'],
-          state.period, {}, state.dateFrom, state.dateTo),
-        fetchWindsor('googleanalytics4', ga4Id,
-          ['item_name','item_id','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'],
-          state.period, {}, state.dateFrom, state.dateTo),
-      ]);
+      const metaProductFields = ['product_id','spend','impressions','clicks'];
+      const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      renderDPA(metaProducts, ga4Products);
+      const fetches = [
+        fetchWindsor('facebook', accountId, metaProductFields, state.period, {}, state.dateFrom, state.dateTo),
+        fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo),
+        hasMerchant ? fetchWindsor('google_merchant', merchantId,
+          ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
+          state.period, {}, state.dateFrom, state.dateTo) : Promise.resolve([]),
+        hasMerchant ? fetchWindsor('google_merchant', merchantId,
+          ['product_id','product_sell_on_google_quantity'],
+          state.period, {}, state.dateFrom, state.dateTo) : Promise.resolve([]),
+      ];
+
+      const [metaRows, ga4Rows, merchantCat, merchantStock] = await Promise.all(fetches);
+      renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
       return;
     }
 
@@ -1490,138 +1462,167 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
   return insights;
 }
 
-// ─── GOOGLE MERCHANT CENTER SCORECARD ────────────────────────
-function renderMerchant(catalogueRows, performanceRows, stockRows, metaRows, ga4Rows) {
-  const hasGA4 = ga4Rows && ga4Rows.length > 0;
+// ─── UNIFIED PRODUCT SCORECARD ───────────────────────────────
+function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant) {
 
-  // Build lookups
-  const perfMap = {};
-  (performanceRows||[]).forEach(r => {
-    const id = r.product_id||'';
-    if (!perfMap[id]) perfMap[id] = {clicks:0,impressions:0,ctr:0};
-    perfMap[id].clicks += parseFloat(r.product_clicks||0);
-    perfMap[id].impressions += parseFloat(r.product_impressions||0);
-    if (r.product_ctr) perfMap[id].ctr = parseFloat(r.product_ctr);
-  });
-
-  const stockMap = {};
-  (stockRows||[]).forEach(r => {
-    const id = r.product_id||'';
-    stockMap[id] = (stockMap[id]||0) + parseInt(r.product_sell_on_google_quantity||0);
-  });
-
+  // ── Meta product lookup (aggregate variants by base slug)
   const metaMap = {};
   (metaRows||[]).forEach(r => {
     const pid = r.product_id||'';
     const slug = pid.includes(',') ? pid.split(',')[0].trim() : pid;
-    if (!metaMap[slug]) metaMap[slug] = {spend:0,impressions:0,clicks:0,purchases:0,revenue:0};
-    metaMap[slug].spend    += parseFloat(r.spend||0);
+    const fullName = pid.includes(',') ? pid.split(',')[1].trim() : pid;
+    const name = fullName
+      .replace(/ - \d+ML SPRAY SAMPLE$/i,'')
+      .replace(/ - \d+ML TRAVEL SPRAY$/i,'')
+      .replace(/ - \d+ML EDP$/i,'')
+      .trim();
+    if (!metaMap[slug]) metaMap[slug] = {slug, name, spend:0, impressions:0, clicks:0};
+    metaMap[slug].spend       += parseFloat(r.spend||0);
     metaMap[slug].impressions += parseFloat(r.impressions||0);
-    metaMap[slug].clicks   += parseFloat(r.clicks||0);
-    metaMap[slug].purchases += parseFloat(r.actions_purchase||0);
-    metaMap[slug].revenue  += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+    metaMap[slug].clicks      += parseFloat(r.clicks||0);
   });
 
+  // ── GA4 lookup by item_id
   const ga4Map = {};
   (ga4Rows||[]).forEach(r => {
-    const id = (r.item_id||'').toLowerCase();
-    ga4Map[id] = r;
+    const id = (r.item_id||'').toLowerCase().trim();
+    if (id) ga4Map[id] = r;
   });
 
-  // Deduplicate catalogue
+  // ── Merchant catalog & stock lookup
   const catMap = {};
-  (catalogueRows||[]).forEach(r => { const id=r.product_id||''; if(!catMap[id]) catMap[id]=r; });
-  const products = Object.values(catMap);
+  (merchantCat||[]).forEach(r => {
+    const id = r.product_id||'';
+    if (!catMap[id]) catMap[id] = r;
+  });
+  const stockMap = {};
+  (merchantStock||[]).forEach(r => {
+    const id = r.product_id||'';
+    stockMap[id] = (stockMap[id]||0) + parseInt(r.product_sell_on_google_quantity||0);
+  });
 
-  // Join all sources
-  const joined = products.map(p => {
-    const id = p.product_id||'';
-    const slug = id.includes(':') ? id.split(':').pop() : id;
-    const idLower = id.toLowerCase();
-    const slugLower = slug.toLowerCase();
+  // ── Join everything
+  const joined = [];
+  Object.values(metaMap).forEach(m => {
+    const slugLower = m.slug.toLowerCase();
+    const baseSlug  = m.slug.split('-').slice(0,-1).join('-').toLowerCase();
 
-    const perf  = perfMap[id] || perfMap[slug] || null;
-    const qty   = stockMap[id] || stockMap[slug] || 0;
-    const meta  = metaMap[slug] || metaMap[id] || null;
-    const ga4   = ga4Map[idLower] || ga4Map[slugLower] || null;
+    // GA4 join
+    const ga4 = ga4Map[slugLower] || ga4Map[baseSlug] || null;
 
-    const price       = parseFloat(p.product_price||0);
-    const available   = (p.product_availability||'').toLowerCase();
-    const inStock     = available === 'in stock' || available === 'in_stock';
-    const metaSpend   = meta ? meta.spend : 0;
-    const metaRoas    = metaSpend > 0 && meta ? meta.revenue/metaSpend : 0;
-    const metaCtr     = meta && meta.impressions > 0 ? meta.clicks/meta.impressions*100 : 0;
-    const gmcCtr      = perf && perf.impressions > 0 ? perf.clicks/perf.impressions*100 : 0;
+    // Merchant join (exact or without variant suffix)
+    const cat   = catMap[m.slug] || catMap[m.slug.split('-').slice(0,-1).join('-')] || null;
+    const qty   = stockMap[m.slug] || stockMap[m.slug.split('-').slice(0,-1).join('-')] || 0;
+
+    // Meta signals
+    const metaCtr  = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
+    const metaCpc  = m.clicks > 0 ? m.spend/m.clicks : 0;
+
+    // GA4 signals
     const ptv         = ga4 ? parseFloat(ga4.purchase_to_view_rate||0)*100 : 0;
     const ctv         = ga4 ? parseFloat(ga4.cart_to_view_rate||0)*100 : 0;
     const ga4Purchases= ga4 ? parseFloat(ga4.items_purchased||0) : 0;
     const ga4Revenue  = ga4 ? parseFloat(ga4.item_revenue||0) : 0;
     const ga4Views    = ga4 ? parseFloat(ga4.items_viewed||0) : 0;
     const ga4Atc      = ga4 ? parseFloat(ga4.items_added_to_cart||0) : 0;
+    const ga4Name     = ga4 ? (ga4.item_name||'') : '';
 
-    // Stock signal
-    let stockSignal, stockColor;
-    if (!inStock)          { stockSignal='Out of stock'; stockColor='var(--red)'; }
-    else if (qty>0&&qty<=5){ stockSignal='Low stock';    stockColor='var(--amber)'; }
-    else                   { stockSignal='In stock';     stockColor='var(--green)'; }
+    // Implied CPA — what Meta is costing to drive one purchase (CPC / PTV%)
+    const impliedCpa = ptv > 0 ? metaCpc / (ptv/100) : null;
 
-    // Scorecard — composite across all three sources
-    let score = 0;
-    if (inStock) score += 20;                          // In stock baseline
-    if (qty > 10) score += 5;                          // Good stock depth
-    if (metaSpend > 0 && metaRoas >= 3) score += 25;  // Excellent Meta ROAS
-    else if (metaSpend > 0 && metaRoas >= 2) score += 15;
-    else if (metaSpend > 0 && metaRoas >= 1) score += 5;
-    if (metaCtr >= 2) score += 10;                    // Strong Meta CTR
-    else if (metaCtr >= 1) score += 5;
-    if (gmcCtr >= 3) score += 10;                     // Strong Google Shopping CTR
-    else if (gmcCtr >= 1) score += 5;
-    if (hasGA4) {
-      if (ptv >= 10) score += 15;                     // High PTV
-      else if (ptv >= 5) score += 8;
-      if (ctv >= 20) score += 10;                     // High ATC rate
-      else if (ctv >= 10) score += 5;
-      if (ga4Purchases > 5) score += 5;               // Volume bonus
+    // Stock
+    const available = (cat?.product_availability||'').toLowerCase();
+    const inStock   = !hasMerchant || available === 'in stock' || available === 'in_stock' || available === '';
+    const price     = cat ? parseFloat(cat.product_price||0) : 0;
+
+    let stockSignal = null, stockColor = 'var(--text3)';
+    if (hasMerchant) {
+      if (!inStock)          { stockSignal='Out of stock'; stockColor='var(--red)'; }
+      else if (qty>0&&qty<=5){ stockSignal='Low stock';    stockColor='var(--amber)'; }
+      else                   { stockSignal='In stock';     stockColor='var(--green)'; }
     }
-    score = Math.min(100, score);
+
+    // Score — Meta-relevant only, purchase volume as primary demand signal
+    let score = 0;
+    // GA4 purchase volume (primary demand signal)
+    if (ga4Purchases >= 20) score += 30;
+    else if (ga4Purchases >= 10) score += 20;
+    else if (ga4Purchases >= 5)  score += 12;
+    else if (ga4Purchases >= 1)  score += 6;
+    // PTV% — converts when people land
+    if (ptv >= 10) score += 25;
+    else if (ptv >= 5) score += 15;
+    else if (ptv >= 2) score += 7;
+    // CTV% — intent signal
+    if (ctv >= 20) score += 15;
+    else if (ctv >= 10) score += 8;
+    else if (ctv >= 5)  score += 4;
+    // Meta CTR — ad engagement
+    if (metaCtr >= 3) score += 20;
+    else if (metaCtr >= 2) score += 14;
+    else if (metaCtr >= 1) score += 7;
+    // CPC efficiency — lower is better
+    if (metaCpc > 0 && metaCpc < 0.2) score += 10;
+    else if (metaCpc < 0.5) score += 5;
+    // Stock penalty
+    if (hasMerchant && !inStock) score = Math.min(score, 5);
+    if (hasMerchant && stockSignal === 'Low stock') score = Math.min(score, 40);
+    score = Math.min(100, Math.round(score));
 
     // Recommendation
-    let rec, recColor;
-    if (!inStock && metaSpend > 0)    { rec='Exclude — out of stock'; recColor='var(--red)'; }
-    else if (!inStock)                { rec='Out of stock'; recColor='var(--text3)'; }
-    else if (score >= 70)             { rec='Scale in DPA + Shopping'; recColor='var(--green)'; }
-    else if (score >= 50)             { rec='Increase budget'; recColor='var(--green)'; }
-    else if (metaSpend > 5 && metaRoas < 1) { rec='Review — low ROAS'; recColor='var(--red)'; }
-    else if (qty > 0 && qty <= 5)    { rec='Low stock — watch closely'; recColor='var(--amber)'; }
-    else if (score >= 30)            { rec='Monitor'; recColor='var(--text2)'; }
-    else                             { rec='Low priority'; recColor='var(--text3)'; }
+    let rec, recColor, recReason;
+    if (hasMerchant && !inStock && m.spend > 0) {
+      rec='Exclude — out of stock'; recColor='var(--red)';
+      recReason='Active Meta spend on out-of-stock product — exclude from DPA feed immediately';
+    } else if (hasMerchant && !inStock) {
+      rec='Out of stock'; recColor='var(--text3)';
+      recReason='Not in stock — no action needed unless spend resumes';
+    } else if (score >= 70) {
+      rec='Scale in DPA'; recColor='var(--green)';
+      recReason=ga4Purchases>=10?`${Math.round(ga4Purchases)} purchases + ${ptv.toFixed(1)}% PTV — strong demand signal, increase DPA budget`:`Strong CTR (${metaCtr.toFixed(2)}%) and ${ptv.toFixed(1)}% PTV — prioritise in feed`;
+    } else if (m.spend > 2 && ptv < 2 && ga4Purchases === 0) {
+      rec='Review or pause'; recColor='var(--red)';
+      recReason='Active spend but zero GA4 purchases and low PTV — likely poor landing page or wrong audience';
+    } else if (hasMerchant && stockSignal === 'Low stock') {
+      rec='Low stock — watch'; recColor='var(--amber)';
+      recReason=`Only ${qty} units remaining — consider excluding before stock runs out`;
+    } else if (score >= 45) {
+      rec='Good candidate'; recColor='var(--amber)';
+      recReason='Decent signals — keep in feed and monitor for scaling opportunity';
+    } else if (impliedCpa && price > 0 && impliedCpa > price) {
+      rec='Check efficiency'; recColor='var(--amber)';
+      recReason=`Implied CPA (${fmt(impliedCpa)}) exceeds product price (${fmt(price)}) — may not be profitable`;
+    } else {
+      rec='Monitor'; recColor='var(--text3)';
+      recReason='Insufficient signals — keep in feed but no action needed';
+    }
 
-    return {
-      id, slug, name: p.product_title||id, brand: p.product_brand||'',
-      category: p.product_category_l1||'', condition: p.product_condition||'',
-      thumb: p.product_thumbnail_link||'',
-      price, inStock, qty, stockSignal, stockColor,
-      metaSpend, metaRoas, metaCtr,
-      gmcClicks: perf?perf.clicks:0, gmcImpressions: perf?perf.impressions:0, gmcCtr,
+    const displayName = ga4Name || m.name || m.slug;
+    const thumb = cat?.product_thumbnail_link || '';
+
+    joined.push({
+      slug: m.slug, name: displayName, thumb, price,
+      inStock, qty, stockSignal, stockColor,
+      metaSpend: m.spend, metaCtr, metaCpc,
       ptv, ctv, ga4Purchases, ga4Revenue, ga4Views, ga4Atc,
-      score, rec, recColor, hasGA4
-    };
+      impliedCpa, score, rec, recColor, recReason, hasMerchant
+    });
   });
 
   joined.sort((a,b) => b.score - a.score);
-  window._merchantProducts = joined;
+  window._dpaProducts = joined;
 
-  const totalProducts    = joined.length;
-  const inStockCount     = joined.filter(p=>p.inStock).length;
-  const outOfStockCount  = joined.filter(p=>!p.inStock).length;
-  const lowStockCount    = joined.filter(p=>p.stockSignal==='Low stock').length;
-  const scaleCount       = joined.filter(p=>p.rec==='Scale in DPA + Shopping').length;
-  const excludeCount     = joined.filter(p=>p.rec.startsWith('Exclude')).length;
-  const withMetaSpend    = joined.filter(p=>p.metaSpend>0).length;
+  const totalSpend     = joined.reduce((s,p)=>s+p.metaSpend,0);
+  const scaleCount     = joined.filter(p=>p.rec==='Scale in DPA').length;
+  const reviewCount    = joined.filter(p=>p.rec==='Review or pause').length;
+  const excludeCount   = joined.filter(p=>p.rec.startsWith('Exclude')).length;
+  const topProduct     = joined[0];
+  const matchedCount   = joined.filter(p=>p.ga4Purchases>0||p.ptv>0).length;
 
   const sorts = [
-    ['score','Score'],['metaSpend','Meta Spend'],['metaRoas','Meta ROAS'],
-    ['gmcCtr','GMC CTR'],['ptv','PTV %'],['qty','Stock Qty'],['price','Price']
+    ['score','Score'],['metaSpend','Meta Spend'],['ga4Purchases','GA4 Purchases'],
+    ['ptv','PTV %'],['ctv','CTV %'],['metaCtr','Meta CTR'],['ga4Revenue','GA4 Revenue'],
+    ...(hasMerchant?[['qty','Stock Qty'],['price','Price']]:[])
   ];
 
   const html = `<div class="fade-in" style="padding:0">
@@ -1630,228 +1631,12 @@ function renderMerchant(catalogueRows, performanceRows, stockRows, metaRows, ga4
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">Product Scorecard</div>
           <div style="font-size:12px;color:var(--text3);">
-            Meta DPA + Google Shopping + ${hasGA4?'GA4 on-site behaviour':'Merchant Center'} · ${totalProducts} products
-            ${hasGA4 ? '<span style="margin-left:8px;padding:2px 7px;border-radius:3px;background:rgba(29,158,117,0.15);color:var(--green);font-size:10px;font-weight:500;">GA4 connected</span>' : ''}
+            Meta DPA × GA4${hasMerchant?' × Merchant Center':''} · ${joined.length} products · ${matchedCount} with GA4 data
+            ${hasMerchant?'<span style="margin-left:6px;padding:2px 7px;border-radius:3px;background:rgba(29,158,117,0.15);color:var(--green);font-size:10px;font-weight:500;">Stock data available</span>':''}
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <div style="font-size:11px;color:var(--text3);">Sort by</div>
-          <select id="merchant-sort" onchange="sortMerchant(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;outline:none;cursor:pointer;">
-            ${sorts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
-          </select>
-          <input id="merchant-search" type="text" placeholder="Search products…" oninput="filterMerchant(this.value)"
-            style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 10px;outline:none;width:180px;" />
-        </div>
-      </div>
-
-      <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Products', totalProducts.toLocaleString(), `${withMetaSpend} with Meta spend`, '')}
-        ${metricCard('In stock', inStockCount.toLocaleString(), `${outOfStockCount} out of stock`, 'var(--green)')}
-        ${metricCard('Low stock', lowStockCount.toLocaleString(), '5 units or fewer', lowStockCount>0?'var(--amber)':'var(--text3)')}
-        ${metricCard('Scale candidates', scaleCount.toLocaleString(), 'score ≥70 · in stock', scaleCount>0?'var(--green)':'var(--text3)')}
-        ${metricCard('Exclude from DPA', excludeCount.toLocaleString(), 'out of stock + active spend', excludeCount>0?'var(--red)':'var(--text3)')}
-      </div>
-
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;font-size:11px;padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);">
-        <span style="color:var(--text3)"><strong style="color:var(--text)">Score</strong> Meta ROAS + CTR + Google Shopping CTR${hasGA4?' + GA4 PTV + cart rate':''} + stock depth</span>
-        <span style="color:var(--text3)"><strong style="color:var(--green)">Scale</strong> ≥70 · <strong style="color:var(--amber)">Monitor</strong> 30–70 · <strong style="color:var(--red)">Review</strong> low ROAS spend</span>
-        ${hasGA4?`<span style="color:var(--text3)"><strong style="color:var(--text)">PTV</strong> purchase-to-view % (GA4) · <strong style="color:var(--text)">CTV</strong> cart-to-view % (GA4)</span>`:''}
-      </div>
-    </div>
-
-    <div style="overflow-x:auto;padding:0 24px 24px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr style="background:var(--bg3);">
-          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:200px;">Product</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Score</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Price</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">Stock</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Qty</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta ROAS</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GMC CTR</th>
-          ${hasGA4?`
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">PTV %</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">CTV %</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA4 Rev</th>`:''}
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:160px;">Recommendation</th>
-        </tr></thead>
-        <tbody id="merchant-tbody">
-          ${renderMerchantRows(joined)}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
-
-  document.getElementById('content').innerHTML = html;
-}
-
-function renderMerchantRows(products) {
-  return products.slice(0,150).map(p => `
-    <tr style="border-bottom:1px solid var(--border);transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <td style="padding:10px 12px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          ${p.thumb ? `<img src="${p.thumb}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;background:var(--bg4);" onerror="this.style.display='none'">` : `<div style="width:32px;height:32px;border-radius:3px;background:var(--bg4);flex-shrink:0;"></div>`}
-          <div>
-            <div style="font-size:12px;font-weight:500;color:var(--text);">${truncate(p.name,40)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${[p.brand,p.category].filter(Boolean).join(' · ')}</div>
-          </div>
-        </div>
-      </td>
-      <td style="padding:10px 8px;text-align:center;">
-        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=70?'rgba(29,158,117,0.15)':p.score>=45?'rgba(201,123,10,0.15)':p.score>=25?'rgba(90,88,86,0.15)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=70?'var(--green)':p.score>=45?'var(--amber)':p.score>=25?'var(--text2)':'var(--text3)'};">${p.score}</div>
-      </td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.price>0?'£'+p.price.toFixed(2):'-'}</td>
-      <td style="padding:10px 8px;text-align:center;font-size:11px;font-weight:500;color:${p.stockColor};">${p.stockSignal}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.qty>0&&p.qty<=5?'var(--amber)':'var(--text2)'};">${p.qty>0?p.qty:'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaSpend>0?'var(--text2)':'var(--text3)'};">${p.metaSpend>0?fmt(p.metaSpend):'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.metaRoas>=3?'var(--green)':p.metaRoas>=2?'var(--green)':p.metaRoas>=1?'var(--amber)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend>0?p.metaRoas.toFixed(2)+'x':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCtr>=2?'var(--green)':p.metaCtr>=1?'var(--text2)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend>0?p.metaCtr.toFixed(2)+'%':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.gmcCtr>=3?'var(--green)':p.gmcImpressions>0?'var(--text2)':'var(--text3)'};">${p.gmcImpressions>0?(p.gmcCtr*100).toFixed(2)+'%':'-'}</td>
-      ${p.hasGA4?`
-      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ptv>=10?'var(--green)':p.ptv>=5?'var(--amber)':'var(--text3)'};">${p.ga4Views>0?p.ptv.toFixed(1)+'%':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctv>=20?'var(--green)':p.ctv>=10?'var(--amber)':'var(--text3)'};">${p.ga4Views>0?p.ctv.toFixed(1)+'%':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.ga4Revenue>0?fmt(p.ga4Revenue):'-'}</td>`:''}
-      <td style="padding:10px 8px;">
-        <span style="font-size:11px;font-weight:500;color:${p.recColor};">${p.rec}</span>
-      </td>
-    </tr>`).join('');
-}
-
-function sortMerchant(field) {
-  if (!window._merchantProducts) return;
-  window._merchantProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
-  const search = document.getElementById('merchant-search')?.value || '';
-  filterMerchant(search);
-}
-
-function filterMerchant(query) {
-  if (!window._merchantProducts) return;
-  const q = query.toLowerCase();
-  const filtered = q
-    ? window._merchantProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.id||'').toLowerCase().includes(q))
-    : window._merchantProducts;
-  const tbody = document.getElementById('merchant-tbody');
-  if (tbody) tbody.innerHTML = renderMerchantRows(filtered);
-}
-
-// ─── DPA ANALYSIS ────────────────────────────────────────────
-function renderDPA(metaRows, ga4Rows) {
-  // Build GA4 lookup by item_id
-  const ga4 = {};
-  ga4Rows.forEach(r => { if (r.item_id) ga4[r.item_id] = r; });
-
-  // Aggregate Meta by base product slug (strip size variant suffix)
-  const metaMap = {};
-  metaRows.forEach(r => {
-    const pid = r.product_id || '';
-    const slug = pid.includes(',') ? pid.split(',')[0].trim() : pid;
-    const fullName = pid.includes(',') ? pid.split(',')[1].trim() : pid;
-    // Strip size variants from name
-    const name = fullName
-      .replace(/ - \d+ML SPRAY SAMPLE$/i,'')
-      .replace(/ - \d+ML TRAVEL SPRAY$/i,'')
-      .replace(/ - \d+ML EDP$/i,'')
-      .trim();
-    if (!metaMap[slug]) metaMap[slug] = { slug, name, spend:0, impressions:0, clicks:0, purchases:0, revenue:0 };
-    metaMap[slug].spend      += parseFloat(r.spend||0);
-    metaMap[slug].impressions+= parseFloat(r.impressions||0);
-    metaMap[slug].clicks     += parseFloat(r.clicks||0);
-    metaMap[slug].purchases  += parseFloat(r.actions_purchase||0);
-    metaMap[slug].revenue    += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
-  });
-
-  // Join Meta + GA4 — try exact slug then base slug
-  const joined = [];
-  Object.values(metaMap).forEach(m => {
-    const baseSlug = m.slug.split('-').slice(0,-1).join('-');
-    const ga = ga4[m.slug] || ga4[baseSlug];
-    if (!ga) return;
-
-    const ctr   = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
-    const cpc   = m.clicks > 0 ? m.spend/m.clicks : 0;
-    const ptv   = parseFloat(ga.purchase_to_view_rate||0)*100;
-    const ctv   = parseFloat(ga.cart_to_view_rate||0)*100;
-    const views = parseFloat(ga.items_viewed||0);
-    const atc   = parseFloat(ga.items_added_to_cart||0);
-    const gaPurchases = parseFloat(ga.items_purchased||0);
-    const gaRevenue   = parseFloat(ga.item_revenue||0);
-
-    // Hero Score — composite of GA conversion signals + Meta efficiency
-    const heroScore = Math.min(100, Math.round(
-      (ptv * 2.5) +                      // purchase-to-view rate — heaviest weight
-      (ctv * 0.8) +                      // cart-to-view rate
-      (ctr * 6) +                        // Meta CTR
-      (gaPurchases > 0 ? 12 : 0) +       // confirmed GA purchases bonus
-      (gaPurchases > 5 ? 8 : 0) +        // high purchase volume bonus
-      (atc > 10 ? 5 : 0)                 // strong add-to-cart volume
-    ));
-
-    // Sync signal — derived from hero score + specific disqualifying conditions
-    let syncSignal, syncColor, syncReason;
-
-    // Hard disqualifier — spending money with no conversion signal at all
-    if (m.spend > 5 && gaPurchases === 0 && ptv < 2 && ctv < 10) {
-      syncSignal = 'Review or pause'; syncColor = 'var(--red)';
-      syncReason = 'Active spend but no on-site conversion signal — may be wasting DPA budget';
-    }
-    // Strong signal — high hero score
-    else if (heroScore >= 70) {
-      syncSignal = 'Strong sync candidate'; syncColor = 'var(--green)';
-      if (ptv >= 10) syncReason = `${ptv.toFixed(1)}% purchase-to-view rate — proven converter, prioritise in DPA feed`;
-      else if (ctr >= 5) syncReason = `${ctr.toFixed(2)}% CTR — exceptional ad engagement, scale impressions`;
-      else syncReason = 'Strong composite score across CTR, cart rate and purchases — prioritise in feed';
-    }
-    // Good signal — worth scaling with caveats
-    else if (heroScore >= 45) {
-      syncSignal = 'Scale with care'; syncColor = 'var(--amber)';
-      if (ctv >= 15 && gaPurchases === 0) syncReason = 'Good cart rate but purchases not confirmed — check pixel or attribution window';
-      else if (ctr >= 2) syncReason = 'Solid CTR and conversion signals — good candidate but monitor closely';
-      else syncReason = 'Decent signals — worth keeping in feed but not a priority for budget increases';
-    }
-    // Monitor — some signal but not enough to act on yet
-    else if (heroScore >= 25) {
-      syncSignal = 'Monitor'; syncColor = 'var(--text2)';
-      syncReason = 'Some positive signals but insufficient data to prioritise — revisit with more spend';
-    }
-    // Weak — no meaningful signal
-    else {
-      syncSignal = 'Low priority'; syncColor = 'var(--text3)';
-      syncReason = 'Weak conversion signals across all metrics — deprioritise in catalogue or exclude';
-    }
-
-    joined.push({ ...m, ga_views:views, ga_atc:atc, ga_purchases:gaPurchases, ga_revenue:gaRevenue, ptv, ctv, ctr, cpc, heroScore, syncSignal, syncColor, syncReason });
-  });
-
-  // Sort by hero score desc
-  joined.sort((a,b) => b.heroScore - a.heroScore);
-
-  // Summary stats
-  const totalMetaSpend = joined.reduce((s,r)=>s+r.spend,0);
-  const strongCandidates = joined.filter(r=>r.syncSignal==='Strong sync candidate').length;
-  const reviewNeeded = joined.filter(r=>r.syncSignal==='Review or pause').length;
-  const topProduct = joined[0];
-
-  // Store for sort/filter — must be set before innerHTML
-  window._dpaProducts = joined;
-
-  // Sort options
-  const sorts = [
-    ['heroScore','Hero Score'],['spend','Meta Spend'],['ptv','Purchase to View'],
-    ['ctv','Cart to View'],['ctr','Meta CTR'],['ga_purchases','GA Purchases'],['ga_revenue','GA Revenue']
-  ];
-
-  const html = `<div class="fade-in" style="padding:0">
-    <!-- DPA HEADER -->
-    <div style="padding:20px 24px 0;">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-        <div>
-          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">DPA Product Analysis</div>
-          <div style="font-size:12px;color:var(--text3)">Meta product feed matched to GA4 ecommerce data · ${joined.length} products matched</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <div style="font-size:11px;color:var(--text3);margin-right:4px;">Sort by</div>
+          <div style="font-size:11px;color:var(--text3);">Sort</div>
           <select id="dpa-sort" onchange="sortDPA(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;outline:none;cursor:pointer;">
             ${sorts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
           </select>
@@ -1860,45 +1645,41 @@ function renderDPA(metaRows, ga4Rows) {
         </div>
       </div>
 
-      <!-- SUMMARY CARDS -->
-      <div class="metrics-grid" style="margin-bottom:20px;">
-        ${metricCard('Products in DPA feed', joined.length.toString(), `of ${Object.keys(metaMap).length} in Meta feed`, '')}
-        ${metricCard('Meta spend on matched', '£'+totalMetaSpend.toFixed(0), 'across joined products', '')}
-        ${metricCard('Strong sync candidates', strongCandidates.toString(), 'high PTV + CTR + cart rate', 'var(--green)')}
-        ${metricCard('Review or pause', reviewNeeded.toString(), 'spend with no GA conversion', 'var(--red)')}
-        ${topProduct ? metricCard('Top hero product', truncate(topProduct.name,22), `Score ${topProduct.heroScore}/100`, 'var(--orange)') : ''}
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        ${metricCard('Products scored', joined.length.toLocaleString(), `£${totalSpend.toFixed(0)} Meta spend`, '')}
+        ${metricCard('Scale in DPA', scaleCount.toString(), 'score ≥70 · strong demand', scaleCount>0?'var(--green)':'var(--text3)')}
+        ${metricCard('Review or pause', reviewCount.toString(), 'spend · no conversion signal', reviewCount>0?'var(--red)':'var(--text3)')}
+        ${hasMerchant?metricCard('Exclude from feed', excludeCount.toString(), 'out of stock + active spend', excludeCount>0?'var(--red)':'var(--text3)'):''}
+        ${topProduct?metricCard('Top product', truncate(topProduct.name,20), `Score ${topProduct.score}/100`, 'var(--orange)'):''}
       </div>
 
-      <!-- LEGEND -->
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--text3);padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);">
-        <span><strong style="color:var(--text)">Hero Score</strong> — composite of purchase-to-view %, cart-to-view %, Meta CTR and GA purchase volume. Higher = better DPA candidate.</span>
-        <span><strong style="color:var(--text)">PTV</strong> purchase-to-view rate (GA4)</span>
-        <span><strong style="color:var(--text)">CTV</strong> cart-to-view rate (GA4)</span>
-        <span><strong style="color:var(--text)">Sync signal</strong> recommendation for Meta DPA feed prioritisation</span>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--text3);">
+        <span><strong style="color:var(--text)">Score</strong> GA4 purchase volume + PTV% + CTV% + Meta CTR + CPC efficiency${hasMerchant?' + stock':''}</span>
+        <span><strong style="color:var(--text)">PTV</strong> purchase-to-view % · <strong style="color:var(--text)">CTV</strong> cart-to-view % · <strong style="color:var(--text)">Implied CPA</strong> Meta CPC ÷ PTV%</span>
       </div>
     </div>
 
-    <!-- PRODUCT TABLE -->
     <div style="overflow-x:auto;padding:0 24px 24px;">
-      <table id="dpa-table" style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:var(--bg3);">
-            <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:200px;">Product</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Score</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Meta CPC</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA Views</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Add to Cart</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">PTV %</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">CTV %</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA Purchases</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA Revenue</th>
-            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:150px;">Sync Signal</th>
-          </tr>
-        </thead>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:var(--bg3);">
+          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:200px;">Product</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Score</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CPC</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">PTV %</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">CTV %</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">GA4 Purchases</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA4 Revenue</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Implied CPA</th>
+          ${hasMerchant?`
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Price</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">Stock</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Qty</th>`:''}
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:160px;">Recommendation</th>
+        </tr></thead>
         <tbody id="dpa-tbody">
-          ${renderDPARows(joined)}
+          ${renderDPARows(joined, hasMerchant)}
         </tbody>
       </table>
     </div>
@@ -1907,36 +1688,43 @@ function renderDPA(metaRows, ga4Rows) {
   document.getElementById('content').innerHTML = html;
 }
 
-function renderDPARows(products) {
-  return products.slice(0, 100).map(p => `
+function renderDPARows(products, hasMerchant) {
+  return products.slice(0,150).map(p => `
     <tr style="border-bottom:1px solid var(--border);transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <td style="padding:10px 12px;font-size:12px;font-weight:500;color:var(--text);">
-        <div>${truncate(p.name, 38)}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.slug}</div>
+      <td style="padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${p.thumb?`<img src="${p.thumb}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;background:var(--bg4);" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:3px;background:var(--bg4);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3);">${(p.name||'').slice(0,2).toUpperCase()}</div>`}
+          <div>
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${truncate(p.name,38)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.slug}</div>
+          </div>
+        </div>
       </td>
       <td style="padding:10px 8px;text-align:center;">
-        <div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:${p.heroScore>=70?'var(--green-bg)':p.heroScore>=45?'var(--amber-bg)':p.heroScore>=25?'rgba(90,88,86,0.2)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:${p.heroScore>=70?'var(--green)':p.heroScore>=45?'var(--amber)':p.heroScore>=25?'var(--text2)':'var(--text3)'};">${p.heroScore}</div>
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=70?'rgba(29,158,117,0.15)':p.score>=45?'rgba(201,123,10,0.15)':p.score>=25?'rgba(90,88,86,0.15)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=70?'var(--green)':p.score>=45?'var(--amber)':p.score>=25?'var(--text2)':'var(--text3)'};">${p.score}</div>
       </td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.spend)}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctr>=2?'var(--green)':p.ctr>=1?'var(--text2)':'var(--red)'};">${p.ctr.toFixed(2)}%</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.cpc)}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${Math.round(p.ga_views).toLocaleString()}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${Math.round(p.ga_atc).toLocaleString()}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ptv>=8?'var(--green)':p.ptv>=4?'var(--amber)':'var(--red)'};">${p.ptv.toFixed(1)}%</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ctv>=20?'var(--green)':p.ctv>=10?'var(--amber)':'var(--text2)'};">${p.ctv.toFixed(1)}%</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${Math.round(p.ga_purchases)}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.ga_revenue)}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaSpend>0?'var(--text2)':'var(--text3)'};">${p.metaSpend>0?fmt(p.metaSpend):'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCtr>=2?'var(--green)':p.metaCtr>=1?'var(--text2)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend>0?p.metaCtr.toFixed(2)+'%':'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.metaCpc>0?fmt(p.metaCpc):'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ptv>=10?'var(--green)':p.ptv>=5?'var(--amber)':p.ga4Views>0?'var(--red)':'var(--text3)'};">${p.ga4Views>0?p.ptv.toFixed(1)+'%':'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctv>=20?'var(--green)':p.ctv>=10?'var(--amber)':'var(--text3)'};">${p.ga4Views>0?p.ctv.toFixed(1)+'%':'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ga4Purchases>=10?'var(--green)':p.ga4Purchases>=3?'var(--amber)':'var(--text3)'};">${p.ga4Purchases>0?Math.round(p.ga4Purchases):'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.ga4Revenue>0?fmt(p.ga4Revenue):'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.impliedCpa&&p.price>0&&p.impliedCpa>p.price?'var(--red)':p.impliedCpa?'var(--text2)':'var(--text3)'};">${p.impliedCpa?fmt(p.impliedCpa):'-'}</td>
+      ${hasMerchant?`
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.price>0?'£'+p.price.toFixed(2):'-'}</td>
+      <td style="padding:10px 8px;text-align:center;font-size:11px;font-weight:500;color:${p.stockColor};">${p.stockSignal||'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.qty>0&&p.qty<=5?'var(--amber)':'var(--text2)'};">${p.qty>0?p.qty:'-'}</td>`:''}
       <td style="padding:10px 8px;">
-        <div style="font-size:11px;font-weight:500;color:${p.syncColor};">${p.syncSignal}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px;line-height:1.3;">${truncate(p.syncReason,55)}</div>
+        <div style="font-size:11px;font-weight:500;color:${p.recColor};">${p.rec}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;line-height:1.3;">${truncate(p.recReason,55)}</div>
       </td>
     </tr>`).join('');
 }
 
 function sortDPA(field) {
   if (!window._dpaProducts) return;
-  const sorted = [...window._dpaProducts].sort((a,b) => (b[field]||0) - (a[field]||0));
-  window._dpaProducts = sorted;
+  window._dpaProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
   const search = document.getElementById('dpa-search')?.value || '';
   filterDPA(search);
 }
@@ -1944,11 +1732,11 @@ function sortDPA(field) {
 function filterDPA(query) {
   if (!window._dpaProducts) return;
   const q = query.toLowerCase();
-  const filtered = q ? window._dpaProducts.filter(p => p.name.toLowerCase().includes(q) || p.slug.includes(q)) : window._dpaProducts;
+  const hasMerchant = window._dpaProducts[0]?.hasMerchant || false;
+  const filtered = q ? window._dpaProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.slug||'').includes(q)) : window._dpaProducts;
   const tbody = document.getElementById('dpa-tbody');
-  if (tbody) tbody.innerHTML = renderDPARows(filtered);
+  if (tbody) tbody.innerHTML = renderDPARows(filtered, hasMerchant);
 }
-
 function showLoading() {
   document.getElementById('content').innerHTML = `
     <div class="state-box">
