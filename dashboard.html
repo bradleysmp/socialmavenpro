@@ -870,18 +870,26 @@ async function loadData() {
       const metaProductFields = ['product_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      const fetches = [
-        fetchWindsor('facebook', accountId, metaProductFields, state.period, {}, state.dateFrom, state.dateTo),
-        fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo),
-        hasMerchant ? fetchWindsor('google_merchant', merchantId,
-          ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
-          state.period, {}, state.dateFrom, state.dateTo) : Promise.resolve([]),
-        hasMerchant ? fetchWindsor('google_merchant', merchantId,
-          ['product_id','product_sell_on_google_quantity'],
-          state.period, {}, state.dateFrom, state.dateTo) : Promise.resolve([]),
-      ];
+      // Fetch sequentially to avoid gateway timeouts on large product catalogues
+      showLoading('Fetching Meta product data…');
+      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, state.period, {}, state.dateFrom, state.dateTo);
 
-      const [metaRows, ga4Rows, merchantCat, merchantStock] = await Promise.all(fetches);
+      showLoading('Fetching GA4 product data…');
+      const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+
+      let merchantCat = [], merchantStock = [];
+      if (hasMerchant) {
+        showLoading('Fetching stock data…');
+        [merchantCat, merchantStock] = await Promise.all([
+          fetchWindsor('google_merchant', merchantId,
+            ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
+            state.period, {}, state.dateFrom, state.dateTo),
+          fetchWindsor('google_merchant', merchantId,
+            ['product_id','product_sell_on_google_quantity'],
+            state.period, {}, state.dateFrom, state.dateTo),
+        ]);
+      }
+
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
       return;
     }
@@ -1737,11 +1745,11 @@ function filterDPA(query) {
   const tbody = document.getElementById('dpa-tbody');
   if (tbody) tbody.innerHTML = renderDPARows(filtered, hasMerchant);
 }
-function showLoading() {
+function showLoading(msg) {
   document.getElementById('content').innerHTML = `
     <div class="state-box">
       <div class="spinner"></div>
-      <p>Loading data from Windsor.ai…</p>
+      <p>${msg || 'Loading data from Windsor.ai…'}</p>
     </div>`;
 }
 
