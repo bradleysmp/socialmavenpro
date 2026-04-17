@@ -21,9 +21,35 @@ exports.handler = async function(event) {
     const params = new URLSearchParams();
     params.append('api_key', api_key);
     params.append('fields', fields);
-    if (date_preset) params.append('date_preset', date_preset);
-    if (date_from) params.append('date_from', date_from);
-    if (date_to) params.append('date_to', date_to);
+    // Connectors that need explicit dates instead of date presets
+    const needsExplicitDates = ['google_merchant', 'googleanalytics'];
+    const needsDates = needsExplicitDates.some(c => connector.startsWith(c));
+
+    let resolvedDateFrom = date_from;
+    let resolvedDateTo = date_to;
+
+    if (needsDates && date_preset && !date_from && !date_to) {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; };
+      const monthStart = (offset=0) => { const d = new Date(now.getFullYear(), now.getMonth()+offset, 1); return d.toISOString().split('T')[0]; };
+      const monthEnd = (offset=0) => { const d = new Date(now.getFullYear(), now.getMonth()+offset+1, 0); return d.toISOString().split('T')[0]; };
+
+      const presetMap = {
+        'last_7d':   [daysAgo(7), daysAgo(1)],
+        'last_30d':  [daysAgo(30), daysAgo(1)],
+        'last_3m':   [daysAgo(90), daysAgo(1)],
+        'last_year': [daysAgo(365), daysAgo(1)],
+        'this_month':[monthStart(), today],
+        'last_1m':   [monthStart(-1), monthEnd(-1)],
+      };
+      const resolved = presetMap[date_preset];
+      if (resolved) { resolvedDateFrom = resolved[0]; resolvedDateTo = resolved[1]; }
+    }
+
+    if (date_preset && !needsDates) params.append('date_preset', date_preset);
+    if (resolvedDateFrom) params.append('date_from', resolvedDateFrom);
+    if (resolvedDateTo) params.append('date_to', resolvedDateTo);
 
     // Connectors that support account_id filtering via filter param
     const filterableConnectors = ['facebook', 'pinterest', 'tiktok', 'google_ads'];
