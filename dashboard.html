@@ -424,9 +424,9 @@
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#000"/><path d="M11 3h-1.5A2.5 2.5 0 007 5.5V10a1.5 1.5 0 11-1.5-1.5v-1.6A3.1 3.1 0 105.5 13V5.5A4 4 0 009.5 9V7.4A2.5 2.5 0 0111 7.5V6a4 4 0 01-1-.5V3z" fill="white"/></svg>
       TikTok
     </button>
-    <button class="ptab" onclick="setPlatform('pinterest',this)" id="tab-pinterest" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#E60023"/><path d="M8 2C4.7 2 2 4.7 2 8c0 2.5 1.5 4.6 3.6 5.6-.05-.4-.1-1 0-1.4l.7-2.8s-.2-.4-.2-1c0-1 .6-1.7 1.3-1.7.6 0 .9.5.9 1 0 .6-.4 1.5-.6 2.3-.2.7.3 1.3 1 1.3 1.2 0 2-1.3 2-3 0-1.6-1.1-2.7-2.7-2.7-1.9 0-3 1.4-3 2.9 0 .6.2 1.2.5 1.5.05.07.06.13.04.2l-.2.8c-.03.1-.1.13-.2.1C4.3 10.3 3.7 9.2 3.7 8c0-2.3 1.7-4.4 4.9-4.4 2.6 0 4.6 1.8 4.6 4.2 0 2.5-1.6 4.6-3.8 4.6-.7 0-1.4-.4-1.6-.8l-.45 1.7c-.16.6-.6 1.4-.9 1.9.7.2 1.4.3 2.05.3 3.3 0 6-2.7 6-6s-2.7-6-6-6z" fill="white"/></svg>
-      Pinterest
+    <button class="ptab" onclick="setPlatform('merchant',this)" id="tab-merchant" style="display:none">
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#4285F4"/><path d="M8 3L5 6h2v5h2V6h2L8 3z" fill="white"/><path d="M3 12h10" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Merchant
     </button>
     <button class="ptab" onclick="setPlatform('dpa',this)" id="tab-dpa" style="display:none">
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
@@ -479,6 +479,11 @@ const CLIENTS = {
   // GA4 account → Meta account mapping (for DPA analysis)
   ga4: {
     '307307410': '1142622296536709', // Fragrance Samples UK
+  },
+  // Google Merchant Center account → Meta account mapping
+  merchant: {
+    // Add merchant account IDs here as clients connect them
+    // e.g. '123456789': '1142622296536709'
   }
 };
 
@@ -646,8 +651,8 @@ function selectClient(id) {
   document.getElementById('btn-pdf').style.display = '';
 
   // Show relevant platform tabs
-  const hasPinterest = Object.values(CLIENTS.pinterest).includes(id);
-  document.getElementById('tab-pinterest').style.display = hasPinterest ? '' : 'none';
+  const hasMerchant = Object.values(CLIENTS.merchant).includes(id);
+  document.getElementById('tab-merchant').style.display = hasMerchant ? '' : 'none';
   document.getElementById('tab-tiktok').style.display = 'none';
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
@@ -855,6 +860,32 @@ async function loadData() {
     const connector = state.platform;
     let accountId = state.client;
     let organicRows = [];
+
+    // ── GOOGLE MERCHANT CENTER ──
+    if (connector === 'merchant') {
+      const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
+      if (!merchantId) { showError('No Google Merchant Center account linked for this client.'); return; }
+
+      const merchantFields = [
+        'product_id','product_title','product_availability','product_price',
+        'product_price_currency_code','product_sell_on_google_quantity',
+        'product_effectiveness','product_click_potential','product_clicks',
+        'product_impressions','product_conversions','product_ctr',
+        'product_thumbnail_link','product_brand','product_category_l1',
+        'product_custom_label_0','product_custom_label_1',
+        'product_condition','product_image_link'
+      ];
+
+      const [merchantRows, metaRows] = await Promise.all([
+        fetchWindsor('google_merchant', merchantId, merchantFields, state.period, {}, state.dateFrom, state.dateTo),
+        fetchWindsor('facebook', accountId,
+          ['product_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'],
+          state.period, {}, state.dateFrom, state.dateTo),
+      ]);
+
+      renderMerchant(merchantRows, metaRows);
+      return;
+    }
 
     // ── DPA ANALYSIS ──
     if (connector === 'dpa') {
@@ -1448,6 +1479,190 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
   if (bestIdx >= 0) insights.push({type:'ok', text:`Best ROAS day was ${sorted[bestIdx]?.date ? formatDate(sorted[bestIdx].date) : 'this period'} at ${roasData[bestIdx].toFixed(2)}x — review what was running that day for scaling signals`, tag:'Best day'});
 
   return insights;
+}
+
+// ─── GOOGLE MERCHANT CENTER ──────────────────────────────────
+function renderMerchant(merchantRows, metaRows) {
+  // Build Meta product lookup by slug
+  const metaMap = {};
+  metaRows.forEach(r => {
+    const pid = r.product_id || '';
+    const slug = pid.includes(',') ? pid.split(',')[0].trim() : pid;
+    if (!metaMap[slug]) metaMap[slug] = { spend:0, impressions:0, clicks:0, purchases:0, revenue:0 };
+    metaMap[slug].spend    += parseFloat(r.spend||0);
+    metaMap[slug].impressions += parseFloat(r.impressions||0);
+    metaMap[slug].clicks   += parseFloat(r.clicks||0);
+    metaMap[slug].purchases+= parseFloat(r.actions_purchase||0);
+    metaMap[slug].revenue  += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+  });
+
+  // Deduplicate merchant rows by product_id — keep latest
+  const merchantMap = {};
+  merchantRows.forEach(r => {
+    const id = r.product_id || '';
+    if (!merchantMap[id]) merchantMap[id] = r;
+  });
+  const products = Object.values(merchantMap);
+
+  // Join with Meta data via slug
+  const joined = products.map(p => {
+    const id = p.product_id || '';
+    const slug = id.includes(':') ? id.split(':').pop() : id; // handle "online:en:GB:slug" format
+    const meta = metaMap[slug] || metaMap[id] || null;
+    const price = parseFloat(p.product_price||0);
+    const available = (p.product_availability||'').toLowerCase();
+    const inStock = available === 'in stock' || available === 'in_stock';
+    const qty = parseInt(p.product_sell_on_google_quantity||0);
+    const effectiveness = p.product_effectiveness || '';
+    const clickPotential = p.product_click_potential || '';
+    const metaSpend = meta ? meta.spend : 0;
+    const metaCtr = meta && meta.impressions > 0 ? meta.clicks/meta.impressions*100 : 0;
+    const metaRoas = meta && metaSpend > 0 ? meta.revenue/metaSpend : 0;
+
+    // Stock signal
+    let stockSignal, stockColor;
+    if (!inStock) { stockSignal = 'Out of stock'; stockColor = 'var(--red)'; }
+    else if (qty > 0 && qty <= 5) { stockSignal = 'Low stock'; stockColor = 'var(--amber)'; }
+    else if (qty > 5) { stockSignal = 'In stock'; stockColor = 'var(--green)'; }
+    else { stockSignal = 'In stock'; stockColor = 'var(--green)'; }
+
+    // DPA recommendation
+    let dpaSignal, dpaColor;
+    if (!inStock) {
+      dpaSignal = 'Exclude from DPA'; dpaColor = 'var(--red)';
+    } else if (metaSpend > 2 && metaRoas >= 2 && inStock) {
+      dpaSignal = 'Scale in DPA'; dpaColor = 'var(--green)';
+    } else if (metaSpend > 2 && metaRoas < 1 && inStock) {
+      dpaSignal = 'Review spend'; dpaColor = 'var(--amber)';
+    } else if (effectiveness === 'EXCELLENT' || clickPotential === 'HIGH') {
+      dpaSignal = 'Strong candidate'; dpaColor = 'var(--green)';
+    } else {
+      dpaSignal = 'Monitor'; dpaColor = 'var(--text3)';
+    }
+
+    return { ...p, slug, meta, metaSpend, metaCtr, metaRoas, price, inStock, qty, stockSignal, stockColor, dpaSignal, dpaColor };
+  });
+
+  // Sort by meta spend desc by default
+  joined.sort((a,b) => b.metaSpend - a.metaSpend);
+  window._merchantProducts = joined;
+
+  const totalProducts = joined.length;
+  const inStockCount = joined.filter(p=>p.inStock).length;
+  const outOfStockCount = joined.filter(p=>!p.inStock).length;
+  const lowStockCount = joined.filter(p=>p.stockSignal==='Low stock').length;
+  const excludeCount = joined.filter(p=>p.dpaSignal==='Exclude from DPA').length;
+  const scaleCount = joined.filter(p=>p.dpaSignal==='Scale in DPA').length;
+  const totalMetaSpend = joined.reduce((s,p)=>s+p.metaSpend,0);
+
+  const merchantSorts = [
+    ['metaSpend','Meta Spend'],['metaRoas','Meta ROAS'],['metaCtr','Meta CTR'],
+    ['price','Price'],['qty','Stock Qty']
+  ];
+
+  const html = `<div class="fade-in" style="padding:0">
+    <div style="padding:20px 24px 0;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">Google Merchant Center</div>
+          <div style="font-size:12px;color:var(--text3)">Product catalogue with stock levels cross-referenced against Meta DPA spend · ${totalProducts} products</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div style="font-size:11px;color:var(--text3);">Sort by</div>
+          <select id="merchant-sort" onchange="sortMerchant(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;outline:none;cursor:pointer;">
+            ${merchantSorts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+          </select>
+          <input id="merchant-search" type="text" placeholder="Search products…" oninput="filterMerchant(this.value)"
+            style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 10px;outline:none;width:180px;" />
+        </div>
+      </div>
+
+      <div class="metrics-grid" style="margin-bottom:20px;">
+        ${metricCard('Total products', totalProducts.toLocaleString(), 'in Merchant Center', '')}
+        ${metricCard('In stock', inStockCount.toLocaleString(), `${outOfStockCount} out of stock`, 'var(--green)')}
+        ${metricCard('Low stock', lowStockCount.toLocaleString(), '5 units or fewer remaining', lowStockCount > 0 ? 'var(--amber)' : 'var(--text3)')}
+        ${metricCard('Exclude from DPA', excludeCount.toLocaleString(), 'out of stock with active spend', excludeCount > 0 ? 'var(--red)' : 'var(--text3)')}
+        ${metricCard('Scale in DPA', scaleCount.toLocaleString(), 'in stock + strong Meta ROAS', scaleCount > 0 ? 'var(--green)' : 'var(--text3)')}
+      </div>
+
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--text3);padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+        <span><strong style="color:var(--red)">Exclude from DPA</strong> — out of stock. Remove from catalogue immediately to stop wasted spend.</span>
+        <span><strong style="color:var(--green)">Scale in DPA</strong> — in stock and generating strong ROAS on Meta. Increase budget allocation.</span>
+        <span><strong style="color:var(--amber)">Low stock</strong> — fewer than 5 units. Consider excluding before stock runs out.</span>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;padding:0 24px 24px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--bg3);">
+            <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:220px;">Product</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Price</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">Stock</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Qty</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Condition</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta ROAS</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Effectiveness</th>
+            <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:140px;">DPA Signal</th>
+          </tr>
+        </thead>
+        <tbody id="merchant-tbody">
+          ${renderMerchantRows(joined)}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderMerchantRows(products) {
+  return products.slice(0,100).map(p => {
+    const thumb = p.product_thumbnail_link || p.product_image_link || '';
+    return `<tr style="border-bottom:1px solid var(--border);transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${thumb ? `<img src="${thumb}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;background:var(--bg4);" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;border-radius:4px;background:var(--bg4);flex-shrink:0;"></div>`}
+          <div>
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${truncate(p.product_title||p.product_id||'',40)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.product_brand ? p.product_brand+' · ' : ''}${p.product_category_l1||''}</div>
+          </div>
+        </div>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.price > 0 ? '£'+p.price.toFixed(2) : '-'}</td>
+      <td style="padding:10px 8px;text-align:center;">
+        <span style="font-size:11px;font-weight:500;color:${p.stockColor};">${p.stockSignal}</span>
+      </td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.qty>0&&p.qty<=5?'var(--amber)':'var(--text2)'};">${p.qty > 0 ? p.qty : '-'}</td>
+      <td style="padding:10px 8px;text-align:center;font-size:11px;color:var(--text3);">${p.product_condition||'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaSpend>0?'var(--text2)':'var(--text3)'};">${p.metaSpend > 0 ? fmt(p.metaSpend) : '-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.metaRoas>=2?'var(--green)':p.metaRoas>=1?'var(--amber)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend > 0 ? p.metaRoas.toFixed(2)+'x' : '-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCtr>=2?'var(--green)':p.metaCtr>=1?'var(--text2)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend > 0 ? p.metaCtr.toFixed(2)+'%' : '-'}</td>
+      <td style="padding:10px 8px;text-align:center;font-size:11px;color:${p.product_effectiveness==='EXCELLENT'?'var(--green)':p.product_effectiveness==='GOOD'?'var(--amber)':'var(--text3)'};">${p.product_effectiveness||'-'}</td>
+      <td style="padding:10px 8px;">
+        <span style="font-size:11px;font-weight:500;color:${p.dpaColor};">${p.dpaSignal}</span>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function sortMerchant(field) {
+  if (!window._merchantProducts) return;
+  window._merchantProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
+  const search = document.getElementById('merchant-search')?.value || '';
+  filterMerchant(search);
+}
+
+function filterMerchant(query) {
+  if (!window._merchantProducts) return;
+  const q = query.toLowerCase();
+  const filtered = q
+    ? window._merchantProducts.filter(p => (p.product_title||'').toLowerCase().includes(q) || (p.product_id||'').toLowerCase().includes(q))
+    : window._merchantProducts;
+  const tbody = document.getElementById('merchant-tbody');
+  if (tbody) tbody.innerHTML = renderMerchantRows(filtered);
 }
 
 // ─── DPA ANALYSIS ────────────────────────────────────────────
