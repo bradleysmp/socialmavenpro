@@ -869,24 +869,28 @@ async function loadData() {
       const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
       if (!merchantId) { showError('No Google Merchant Center account linked for this client.'); return; }
 
+      // Google Merchant requires separate calls for incompatible field groups
       const catalogueFields = [
         'product_id','product_title','product_availability','product_price',
-        'product_brand','product_category_l1','product_condition',
-        'product_thumbnail_link'
+        'product_brand','product_category_l1','product_condition','product_thumbnail_link'
       ];
       const performanceFields = [
-        'product_id','product_clicks','product_impressions','product_ctr','product_sell_on_google_quantity'
+        'product_id','product_clicks','product_impressions','product_ctr'
+      ];
+      const stockFields = [
+        'product_id','product_sell_on_google_quantity'
       ];
 
-      const [merchantCatalogue, merchantPerformance, metaRows] = await Promise.all([
+      const [merchantCatalogue, merchantPerformance, merchantStock, metaRows] = await Promise.all([
         fetchWindsor('google_merchant', merchantId, catalogueFields, state.period, {}, state.dateFrom, state.dateTo),
         fetchWindsor('google_merchant', merchantId, performanceFields, state.period, {}, state.dateFrom, state.dateTo),
+        fetchWindsor('google_merchant', merchantId, stockFields, state.period, {}, state.dateFrom, state.dateTo),
         fetchWindsor('facebook', accountId,
           ['product_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'],
           state.period, {}, state.dateFrom, state.dateTo),
       ]);
 
-      renderMerchant(merchantCatalogue, merchantPerformance, metaRows);
+      renderMerchant(merchantCatalogue, merchantPerformance, merchantStock, metaRows);
       return;
     }
 
@@ -1485,16 +1489,23 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
 }
 
 // ─── GOOGLE MERCHANT CENTER ──────────────────────────────────
-function renderMerchant(catalogueRows, performanceRows, metaRows) {
+function renderMerchant(catalogueRows, performanceRows, stockRows, metaRows) {
   // Build performance lookup by product_id
   const perfMap = {};
   (performanceRows||[]).forEach(r => {
     const id = r.product_id || '';
-    if (!perfMap[id]) perfMap[id] = { clicks:0, impressions:0, ctr:0, qty:0 };
+    if (!perfMap[id]) perfMap[id] = { clicks:0, impressions:0, ctr:0 };
     perfMap[id].clicks += parseFloat(r.product_clicks||0);
     perfMap[id].impressions += parseFloat(r.product_impressions||0);
-    perfMap[id].qty += parseInt(r.product_sell_on_google_quantity||0);
     if (r.product_ctr) perfMap[id].ctr = parseFloat(r.product_ctr);
+  });
+
+  // Build stock lookup by product_id
+  const stockMap = {};
+  (stockRows||[]).forEach(r => {
+    const id = r.product_id || '';
+    if (!stockMap[id]) stockMap[id] = 0;
+    stockMap[id] += parseInt(r.product_sell_on_google_quantity||0);
   });
 
   // Build Meta product lookup by slug
@@ -1527,7 +1538,7 @@ function renderMerchant(catalogueRows, performanceRows, metaRows) {
     const price = parseFloat(p.product_price||0);
     const available = (p.product_availability||'').toLowerCase();
     const inStock = available === 'in stock' || available === 'in_stock';
-    const qty = perf ? perf.qty : 0;
+    const qty = stockMap[id] || stockMap[slug] || 0;
     const metaSpend = meta ? meta.spend : 0;
     const metaCtr = meta && meta.impressions > 0 ? meta.clicks/meta.impressions*100 : 0;
     const metaRoas = meta && metaSpend > 0 ? meta.revenue/metaSpend : 0;
