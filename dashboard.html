@@ -867,12 +867,18 @@ async function loadData() {
       const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
       const hasMerchant = !!merchantId;
 
+      // Use selected period for GA4/Merchant but cap Meta DPA at 30d max
+      // to avoid timeout on large product catalogues
+      const dpaMetaPeriod = (state.period === 'last_3m' || state.period === 'last_year') ? 'last_30d' : state.period;
+      const dpaMetaFrom = state.dateFrom;
+      const dpaMetaTo = state.dateTo;
+
       const metaProductFields = ['product_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
       // Fetch sequentially to avoid gateway timeouts on large product catalogues
       showLoading('Fetching Meta product data…');
-      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, state.period, {}, state.dateFrom, state.dateTo);
+      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, {}, dpaMetaFrom, dpaMetaTo);
 
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
