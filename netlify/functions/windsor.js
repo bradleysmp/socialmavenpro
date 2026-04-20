@@ -16,7 +16,7 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options } = JSON.parse(event.body);
+    const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options, filters, strip_zero_spend } = JSON.parse(event.body);
 
     const params = new URLSearchParams();
     params.append('api_key', api_key);
@@ -62,8 +62,15 @@ exports.handler = async function(event) {
       }
     }
 
+    if (filters) {
+      params.append('filter', JSON.stringify(filters));
+    }
+
     if (options && typeof options === 'object') {
-      Object.entries(options).forEach(([k, v]) => params.append(k, v));
+      Object.entries(options).forEach(([k, v]) => {
+        // strip_zero_spend is a proxy-only flag, don't forward to Windsor
+        if (k !== 'strip_zero_spend') params.append(k, v);
+      });
     }
 
     const url = `https://connectors.windsor.ai/${connector}?${params}`;
@@ -79,6 +86,12 @@ exports.handler = async function(event) {
     }
 
     let data = await response.json();
+
+    // Strip zero-spend rows to reduce payload size for product-level requests
+    const shouldStrip = strip_zero_spend || (options && options.strip_zero_spend);
+    if (shouldStrip && Array.isArray(data)) {
+      data = data.filter(r => parseFloat(r.spend || 0) > 0);
+    }
 
     // Safety net — filter by account_id client-side in case Windsor returns mixed accounts
     if (account_id && Array.isArray(data)) {
