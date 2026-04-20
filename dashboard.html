@@ -1116,15 +1116,16 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
 
   const camps = aggregateCampaigns(campRows, connector, isLeadGen);
   const creatives = aggregateCreatives(creativeRows, isLeadGen);
-  const insights = isLeadGen
-    ? buildLeadGenInsights(totalSpend, totalLeads, totalPurchases, cpl, cpp, leadRate, clickToLead, sorted, roasData)
-    : buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders, settings);
 
   const settings = CLIENT_SETTINGS[state.client] || {};
   const breakEvenRoas = settings.breakEvenRoas || null;
   const targetRoas    = settings.targetRoas    || null;
   const targetCpl     = settings.targetCpl     || null;
   const targetCpp     = settings.targetCpp     || null;
+
+  const insights = isLeadGen
+    ? buildLeadGenInsights(totalSpend, totalLeads, totalPurchases, cpl, cpp, leadRate, clickToLead, sorted, roasData)
+    : buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders, settings);
 
   const roasColor = !isLeadGen
     ? (breakEvenRoas
