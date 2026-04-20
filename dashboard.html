@@ -850,6 +850,52 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
   return data;
 }
 
+// Direct Windsor fetch — bypasses Netlify proxy for large requests
+async function fetchWindsorDirect(connector, accountId, fields, datePreset, dateFrom = null, dateTo = null) {
+  const cacheKey = `direct_${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}`;
+  if (state.cache[cacheKey]) return state.cache[cacheKey];
+
+  // Resolve date presets to explicit dates (required for some connectors)
+  const now = new Date();
+  const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; };
+  const presetMap = {
+    'last_7d':   [daysAgo(7), daysAgo(1)],
+    'last_30d':  [daysAgo(30), daysAgo(1)],
+    'last_3m':   [daysAgo(90), daysAgo(1)],
+    'last_year': [daysAgo(365), daysAgo(1)],
+    'this_month':[new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0], now.toISOString().split('T')[0]],
+    'last_1m':   [new Date(now.getFullYear(),now.getMonth()-1,1).toISOString().split('T')[0], new Date(now.getFullYear(),now.getMonth(),0).toISOString().split('T')[0]],
+  };
+
+  const params = new URLSearchParams();
+  params.append('api_key', state.apiKey);
+  params.append('fields', fields.join(','));
+  if (accountId) params.append('account_id', accountId);
+
+  if (dateFrom && dateTo) {
+    params.append('date_from', dateFrom);
+    params.append('date_to', dateTo);
+  } else if (datePreset) {
+    const resolved = presetMap[datePreset];
+    if (resolved) {
+      params.append('date_from', resolved[0]);
+      params.append('date_to', resolved[1]);
+    } else {
+      params.append('date_preset', datePreset);
+    }
+  }
+
+  const url = `https://connectors.windsor.ai/${connector}?${params}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Windsor API error: ${res.status} — ${text}`);
+  }
+  const data = await res.json();
+  state.cache[cacheKey] = Array.isArray(data) ? data : (data.data || []);
+  return state.cache[cacheKey];
+}
+
 // ─── LOAD DATA ─────────────────────────────────────────────
 async function loadData() {
   destroyCharts();
@@ -878,7 +924,7 @@ async function loadData() {
 
       // Fetch sequentially to avoid gateway timeouts on large product catalogues
       showLoading('Fetching Meta product data…');
-      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, {}, dpaMetaFrom, dpaMetaTo);
+      const metaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
 
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
