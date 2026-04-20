@@ -16,7 +16,7 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options, filters, strip_zero_spend } = JSON.parse(event.body);
+    const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options, filters, strip_zero_spend, top_n_by_spend } = JSON.parse(event.body);
 
     const params = new URLSearchParams();
     params.append('api_key', api_key);
@@ -68,8 +68,8 @@ exports.handler = async function(event) {
 
     if (options && typeof options === 'object') {
       Object.entries(options).forEach(([k, v]) => {
-        // strip_zero_spend is a proxy-only flag, don't forward to Windsor
-        if (k !== 'strip_zero_spend') params.append(k, v);
+        // These are proxy-only flags, don't forward to Windsor
+        if (k !== 'strip_zero_spend' && k !== 'top_n_by_spend') params.append(k, v);
       });
     }
 
@@ -91,6 +91,14 @@ exports.handler = async function(event) {
     const shouldStrip = strip_zero_spend || (options && options.strip_zero_spend);
     if (shouldStrip && Array.isArray(data)) {
       data = data.filter(r => parseFloat(r.spend || 0) > 0);
+    }
+
+    // Limit to top N rows by spend — drastically reduces payload for large product catalogues
+    if (top_n_by_spend && Array.isArray(data)) {
+      data = data
+        .filter(r => parseFloat(r.spend || 0) > 0)
+        .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
+        .slice(0, top_n_by_spend);
     }
 
     // Safety net — filter by account_id client-side in case Windsor returns mixed accounts
