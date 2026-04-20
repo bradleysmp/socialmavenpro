@@ -485,7 +485,26 @@ const CLIENTS = {
   }
 };
 
-// ─── STATE ─────────────────────────────────────────────────
+// ─── CLIENT SETTINGS ───────────────────────────────────────
+// Per-client targets — edit these as you agree targets with each client
+// breakEvenRoas: minimum ROAS to be profitable (1 / margin%)
+// targetRoas: agreed performance target
+// targetCpl: target cost per lead (lead gen clients)
+// targetCpp: target cost per purchase (Oven Support purchases campaign)
+// margin: gross margin % (0.4 = 40%) — used to calculate break-even ROAS
+const CLIENT_SETTINGS = {
+  '1142622296536709': { name: 'Fragrance Samples UK',   margin: 0.60, targetRoas: 5.0,  breakEvenRoas: 1.67 },
+  '1391771454464525': { name: 'Bedrooms Plus Ltd',      margin: 0.45, targetRoas: 4.0,  breakEvenRoas: 2.22 },
+  '1071305009552720': { name: 'Country House Outdoor',  margin: 0.45, targetRoas: 4.0,  breakEvenRoas: 2.22 },
+  '243539866329062':  { name: 'Horns of Odin',          margin: 0.50, targetRoas: 4.0,  breakEvenRoas: 2.00 },
+  '877017732651263':  { name: 'CP Lighting & Interiors',margin: 0.45, targetRoas: 5.0,  breakEvenRoas: 2.22 },
+  '468452590544702':  { name: 'Decorum Living',         margin: 0.50, targetRoas: 4.0,  breakEvenRoas: 2.00 },
+  '1138713326327890': { name: 'Neo Direct',             margin: 0.45, targetRoas: 3.0,  breakEvenRoas: 2.22 },
+  '457775049411494':  { name: 'Oven Support',           margin: null, targetCpl: 8.0,   targetCpp: 50.0     },
+  '223014600213426':  { name: 'Alchemy London',         margin: 0.55, targetRoas: 5.0,  breakEvenRoas: 1.82 },
+};
+
+
 let state = {
   apiKey: localStorage.getItem('windsor_api_key') || '',
   client: null,
@@ -978,8 +997,8 @@ async function loadData() {
       : ['date','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const campFields = isLeadGen
-      ? ['campaign','account_id','spend','impressions','clicks','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
-      : ['campaign','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+      ? ['campaign','account_id','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
+      : ['campaign','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const creativeFields = isLeadGen
       ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url']
@@ -1099,26 +1118,63 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const creatives = aggregateCreatives(creativeRows, isLeadGen);
   const insights = isLeadGen
     ? buildLeadGenInsights(totalSpend, totalLeads, totalPurchases, cpl, cpp, leadRate, clickToLead, sorted, roasData)
-    : buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders);
+    : buildInsights(roas, cpa, aov, ctr, avgFreq, sorted, roasData, totalSpend, totalOrders, settings);
+
+  const settings = CLIENT_SETTINGS[state.client] || {};
+  const breakEvenRoas = settings.breakEvenRoas || null;
+  const targetRoas    = settings.targetRoas    || null;
+  const targetCpl     = settings.targetCpl     || null;
+  const targetCpp     = settings.targetCpp     || null;
+
+  const roasColor = !isLeadGen
+    ? (breakEvenRoas
+        ? (roas >= targetRoas  ? 'var(--green)'
+         : roas >= breakEvenRoas ? 'var(--amber)'
+         : 'var(--red)')
+        : (roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)'))
+    : 'var(--text)';
+
+  const roasSubtext = !isLeadGen && breakEvenRoas
+    ? `break-even ${breakEvenRoas.toFixed(2)}x${targetRoas ? ` · target ${targetRoas.toFixed(1)}x` : ''}`
+    : 'Meta attributed';
+
+  const cplColor = isLeadGen && targetCpl
+    ? (cpl <= targetCpl ? 'var(--green)' : cpl <= targetCpl * 1.5 ? 'var(--amber)' : 'var(--red)')
+    : (cpl > 0 && cpl < 15 ? 'var(--green)' : cpl < 30 ? 'var(--amber)' : 'var(--red)');
+
+  const freqAlert = avgFreq >= 2.5
+    ? `<div style="background:rgba(226,75,74,0.10);border:1px solid rgba(226,75,74,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--red);">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7 4v3.5M7 9.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <strong>Frequency alert:</strong>&nbsp;${avgFreq.toFixed(2)}x — audience may be experiencing ad fatigue. Consider expanding targeting or refreshing creatives.
+      </div>`
+    : avgFreq >= 2.0
+    ? `<div style="background:rgba(201,123,10,0.10);border:1px solid rgba(201,123,10,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--amber);">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7 4v3.5M7 9.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <strong>Frequency watch:</strong>&nbsp;${avgFreq.toFixed(2)}x — approaching fatigue territory. Monitor CTR for signs of creative wear-out.
+      </div>`
+    : '';
 
   const metricsHTML = isLeadGen ? `
+    ${freqAlert}
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
       ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)', delta(totalLeads, cmpLeads, false))}
-      ${metricCard('Cost Per Lead', fmt(cpl), 'CPL', cpl > 0 && cpl < 15 ? 'var(--green)' : cpl < 30 ? 'var(--amber)' : 'var(--red)', delta(cpl, cmpCpl, true))}
-      ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, '', '')}
-      ${metricCard('Cost Per Purchase', fmt(cpp), 'oven jobs/bookings', '', '')}
+      ${metricCard('Cost Per Lead', fmt(cpl), targetCpl ? `target £${targetCpl.toFixed(2)}` : 'CPL', cplColor, delta(cpl, cmpCpl, true))}
+      ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, totalPurchases > 0 ? 'var(--green)' : 'var(--text3)', '')}
+      ${metricCard('Cost Per Purchase', fmt(cpp), targetCpp ? `target £${targetCpp.toFixed(0)}` : 'direct bookings', cpp > 0 && targetCpp ? (cpp <= targetCpp ? 'var(--green)' : 'var(--red)') : '', '')}
       ${metricCard('Landing Page Views', totalLPV.toLocaleString(), `${leadRate.toFixed(1)}% lead rate`, '', '')}
       ${metricCard('Click → Lead', clickToLead.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '', '')}
       ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '', delta(avgCpm, cmpCpm, true))}
       ${metricCard('CTR', ctr.toFixed(2)+'%', `Freq. ${avgFreq.toFixed(2)}`, '', delta(ctr, cmpCtr, false))}
       ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', 'unique people', '', '')}
     </div>` : `
+    ${freqAlert}
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
       ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '', delta(totalRev, cmpRev, false))}
-      ${metricCard('ROAS', roas.toFixed(2)+'x', 'Meta attributed', roas >= 2 ? 'var(--green)' : roas >= 1 ? 'var(--amber)' : 'var(--red)', delta(roas, cmpRoas, false))}
-      ${metricCard('CPA', fmt(cpa), `AOV ${fmt(aov)}`, '', delta(cpa, cmpSpend > 0 && cmpOrders > 0 ? cmpSpend/cmpOrders : 0, true))}
+      ${metricCard('ROAS', roas.toFixed(2)+'x', roasSubtext, roasColor, delta(roas, cmpRoas, false))}
+      ${metricCard('AOV', fmt(aov), `avg order value`, aov > 0 ? 'var(--text)' : 'var(--text3)', '')}
+      ${metricCard('CPA', fmt(cpa), `${Math.round(totalOrders)} orders`, '', delta(cpa, cmpSpend > 0 && cmpOrders > 0 ? cmpSpend/cmpOrders : 0, true))}
       ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '', delta(avgCpm, cmpCpm, true))}
       ${metricCard('CTR', ctr.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '', delta(ctr, cmpCtr, false))}
       ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', `Freq. ${avgFreq.toFixed(2)}`, '', '')}
@@ -1128,58 +1184,99 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const chartLabel = isLeadGen ? 'Spend vs Leads' : (connector === 'pinterest' ? 'Spend vs Checkouts' : 'Spend vs Revenue');
   const secondaryLabel = isLeadGen ? 'Leads' : (connector === 'pinterest' ? 'Checkouts' : 'Revenue');
   const roasChartLabel = isLeadGen ? 'Daily CPL trend' : 'Daily ROAS';
-  const campaignTableHTML = isLeadGen ? `
-    <div class="table-card">
-      <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr>
-            <th>Campaign</th><th>Spend</th><th>Leads</th><th>CPL</th>
-            <th>Purchases</th><th>CPP</th><th>CTR</th><th>CPM</th>
-          </tr></thead>
-          <tbody>
-            ${camps.slice(0,15).map(c => {
-              const ccpl = c.leads > 0 ? c.spend/c.leads : 0;
-              const ccpp = c.orders > 0 ? c.spend/c.orders : 0;
-              const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
-              const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
-              return `<tr>
-                <td title="${c.name}">${truncate(c.name,38)}</td>
-                <td>${fmt(c.spend)}</td>
-                <td style="color:${c.leads>0?'var(--green)':'var(--text3)'};font-weight:500">${Math.round(c.leads)}</td>
-                <td style="color:${ccpl>0&&ccpl<15?'var(--green)':ccpl<30?'var(--amber)':'var(--red)'};font-weight:500">${ccpl>0?fmt(ccpl):'-'}</td>
-                <td>${Math.round(c.orders)}</td>
-                <td>${ccpp>0?fmt(ccpp):'-'}</td>
-                <td>${cctr.toFixed(2)}%</td>
-                <td>£${ccpm.toFixed(2)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
+  const campaignTableHTML = isLeadGen ? (() => {
+    // Split campaigns into leads vs purchases
+    const leadCamps = camps.filter(c => c.leads > 0);
+    const purchCamps = camps.filter(c => c.leads === 0 && c.orders > 0);
+    const otherCamps = camps.filter(c => c.leads === 0 && c.orders === 0);
+
+    const campRow = (c, type) => {
+      const ccpl = c.leads > 0 ? c.spend/c.leads : 0;
+      const ccpp = c.orders > 0 ? c.spend/c.orders : 0;
+      const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+      const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
+      const cfreq = c.reach > 0 ? c.impressions/c.reach : 0;
+      if (type === 'leads') return `<tr>
+        <td title="${c.name}">${truncate(c.name,38)}</td>
+        <td>${fmt(c.spend)}</td>
+        <td style="color:${c.leads>0?'var(--green)':'var(--text3)'};font-weight:500">${Math.round(c.leads)}</td>
+        <td style="color:${ccpl>0&&targetCpl?(ccpl<=targetCpl?'var(--green)':ccpl<=targetCpl*1.5?'var(--amber)':'var(--red)'):(ccpl>0&&ccpl<15?'var(--green)':ccpl<30?'var(--amber)':'var(--red)')};font-weight:500">${ccpl>0?fmt(ccpl):'-'}</td>
+        <td>${cctr.toFixed(2)}%</td>
+        <td>£${ccpm.toFixed(2)}</td>
+        <td style="color:${cfreq>=2.5?'var(--red)':cfreq>=2.0?'var(--amber)':'var(--text2)'}">${cfreq>0?cfreq.toFixed(2):'-'}</td>
+      </tr>`;
+      return `<tr>
+        <td title="${c.name}">${truncate(c.name,38)}</td>
+        <td>${fmt(c.spend)}</td>
+        <td style="color:${c.orders>0?'var(--green)':'var(--text3)'};font-weight:500">${Math.round(c.orders)}</td>
+        <td style="color:${ccpp>0&&targetCpp?(ccpp<=targetCpp?'var(--green)':ccpp<=targetCpp*1.5?'var(--amber)':'var(--red)'):''};font-weight:500">${ccpp>0?fmt(ccpp):'-'}</td>
+        <td>${cctr.toFixed(2)}%</td>
+        <td>£${ccpm.toFixed(2)}</td>
+        <td style="color:${cfreq>=2.5?'var(--red)':cfreq>=2.0?'var(--amber)':'var(--text2)'}">${cfreq>0?cfreq.toFixed(2):'-'}</td>
+      </tr>`;
+    };
+
+    const section = (title, color, headers, rows) => rows.length === 0 ? '' : `
+      <div style="margin-bottom:4px;padding:8px 12px;background:var(--bg3);border-radius:4px 4px 0 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:${color};">${title}</span>
       </div>
-    </div>` : `
+      <table style="margin-bottom:16px;">
+        <thead><tr><th>Campaign</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    return `<div class="table-card">
+      <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
+      <div style="overflow-x:auto;padding:0 0 4px;">
+        ${section('Leads Campaign', 'var(--green)',
+          '<th>Spend</th><th>Leads</th><th>CPL</th><th>CTR</th><th>CPM</th><th>Freq.</th>',
+          leadCamps.map(c => campRow(c, 'leads')).join(''))}
+        ${section('Purchases Campaign', 'var(--orange)',
+          '<th>Spend</th><th>Purchases</th><th>CPP</th><th>CTR</th><th>CPM</th><th>Freq.</th>',
+          purchCamps.map(c => campRow(c, 'purch')).join(''))}
+        ${section('Other Campaigns', 'var(--text3)',
+          '<th>Spend</th><th>Leads</th><th>Purchases</th><th>CTR</th><th>CPM</th><th>Freq.</th>',
+          otherCamps.map(c => {
+            const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+            const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
+            const cfreq = c.reach > 0 ? c.impressions/c.reach : 0;
+            return `<tr>
+              <td title="${c.name}">${truncate(c.name,38)}</td>
+              <td>${fmt(c.spend)}</td><td>${Math.round(c.leads)}</td><td>${Math.round(c.orders)}</td>
+              <td>${cctr.toFixed(2)}%</td><td>£${ccpm.toFixed(2)}</td>
+              <td>${cfreq>0?cfreq.toFixed(2):'-'}</td>
+            </tr>`;
+          }).join(''))}
+      </div>
+    </div>`;
+  })() : `
     <div class="table-card">
       <div class="table-header"><div class="table-title">Campaign Breakdown</div></div>
       <div style="overflow-x:auto">
         <table>
           <thead><tr>
             <th>Campaign</th><th>Spend</th><th>Revenue</th><th>ROAS</th>
-            <th>Purchases</th><th>CPA</th><th>CPM</th><th>CTR</th>
+            <th>Purchases</th><th>CPA</th><th>CTR</th><th>CPM</th><th>Freq.</th>
           </tr></thead>
           <tbody>
             ${camps.slice(0,15).map(c => {
               const cr = c.spend > 0 ? c.rev/c.spend : 0;
               const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
               const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+              const cfreq = c.reach > 0 ? c.impressions/c.reach : 0;
+              const crColor = breakEvenRoas
+                ? (cr >= targetRoas ? 'var(--green)' : cr >= breakEvenRoas ? 'var(--amber)' : 'var(--red)')
+                : (cr>=2?'var(--green)':cr>=1?'var(--amber)':'var(--red)');
               return `<tr>
                 <td title="${c.name}">${truncate(c.name,38)}</td>
                 <td>${fmt(c.spend)}</td>
                 <td>${fmt(c.rev)}</td>
-                <td style="color:${cr>=2?'var(--green)':cr>=1?'var(--amber)':'var(--red)'};font-weight:500">${cr.toFixed(2)}x</td>
+                <td style="color:${crColor};font-weight:500">${cr.toFixed(2)}x</td>
                 <td>${Math.round(c.orders)}</td>
                 <td>${c.orders>0?fmt(c.spend/c.orders):'-'}</td>
-                <td>£${ccpm.toFixed(2)}</td>
                 <td>${cctr.toFixed(2)}%</td>
+                <td>£${ccpm.toFixed(2)}</td>
+                <td style="color:${cfreq>=2.5?'var(--red)':cfreq>=2.0?'var(--amber)':'var(--text2)'}">${cfreq>0?cfreq.toFixed(2):'-'}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1262,12 +1359,15 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
         ${creatives.slice(0,12).map(c => {
           const roas = c.spend > 0 && c.rev > 0 ? c.rev/c.spend : 0;
           const cctr = c.impressions > 0 ? (c.clicks/c.impressions*100) : 0;
+          const ccpm = c.impressions > 0 ? (c.spend/c.impressions*1000) : 0;
           const primaryVal = isLeadGen ? Math.round(c.leads) : fmt(c.rev);
           const primaryLabel = isLeadGen ? 'Leads' : 'Revenue';
           const secondaryVal = isLeadGen ? (c.leads > 0 ? fmt(c.spend/c.leads) : '-') : (c.orders > 0 ? fmt(c.spend/c.orders) : '-');
           const secondaryLabel = isLeadGen ? 'CPL' : 'CPA';
           const showBadge = !isLeadGen && roas > 0;
-          const badgeColor = roas>=2?'#1D9E75':roas>=1?'#C97B0A':'#E24B4A';
+          const badgeColor = breakEvenRoas
+            ? (roas >= targetRoas ? '#1D9E75' : roas >= breakEvenRoas ? '#C97B0A' : '#E24B4A')
+            : (roas>=2?'#1D9E75':roas>=1?'#C97B0A':'#E24B4A');
           const displayImg = imgProxy(c.thumbnail_url || c.image_url);
           return `<div class="creative-card">
             <div class="creative-thumb">
@@ -1284,8 +1384,9 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
               <div class="creative-row"><span class="creative-stat-label">Spend</span><span>${fmt(c.spend)}</span></div>
               <div class="creative-row"><span class="creative-stat-label">${primaryLabel}</span><span>${primaryVal}</span></div>
               <div class="creative-row"><span class="creative-stat-label">${secondaryLabel}</span><span>${secondaryVal}</span></div>
-              <div class="creative-row"><span class="creative-stat-label">CTR</span><span>${cctr.toFixed(2)}%</span></div>
-              <div class="creative-row"><span class="creative-stat-label">Purchases</span><span>${Math.round(c.orders)}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">CTR</span><span style="color:${cctr>=2?'var(--green)':cctr>=1?'var(--text)':'var(--red)'}">${cctr.toFixed(2)}%</span></div>
+              <div class="creative-row"><span class="creative-stat-label">CPM</span><span>£${ccpm.toFixed(2)}</span></div>
+              <div class="creative-row"><span class="creative-stat-label">Impressions</span><span>${(c.impressions/1000).toFixed(1)}k</span></div>
             </div>
           </div>`;
         }).join('')}
@@ -1407,10 +1508,11 @@ function aggregateCampaigns(rows, connector, isLeadGen = false) {
   const map = {};
   rows.forEach(r => {
     const name = r.campaign || 'Unknown';
-    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0 };
+    if (!map[name]) map[name] = { name, spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0, reach:0 };
     map[name].spend += parseFloat(r.spend||0);
     map[name].impressions += parseFloat(r.impressions||0);
     map[name].clicks += parseFloat(r.clicks||0);
+    map[name].reach += parseFloat(r.reach||0);
     if (isLeadGen) {
       map[name].leads += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
       map[name].orders += parseFloat(r.actions_purchase||0);
@@ -1485,9 +1587,22 @@ function buildLeadGenInsights(spend, leads, purchases, cpl, cpp, leadRate, click
   return insights;
 }
 
-function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, totalOrders) {
+function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, totalOrders, settings) {
   const insights = [];
   const validROAS = roasData.filter(r => r !== null);
+  const breakEvenRoas = settings?.breakEvenRoas || null;
+  const targetRoas = settings?.targetRoas || null;
+
+  // Break-even ROAS context — most important signal
+  if (breakEvenRoas) {
+    if (roas < breakEvenRoas) {
+      insights.push({type:'bad', text:`ROAS of ${roas.toFixed(2)}x is below break-even (${breakEvenRoas.toFixed(2)}x based on estimated margin) — campaigns are currently loss-making at this attribution window`, tag:'Below break-even'});
+    } else if (targetRoas && roas >= targetRoas) {
+      insights.push({type:'ok', text:`ROAS of ${roas.toFixed(2)}x is above the ${targetRoas.toFixed(1)}x target — campaigns are performing ahead of goal`, tag:'Above target'});
+    } else if (roas >= breakEvenRoas) {
+      insights.push({type:'warn', text:`ROAS of ${roas.toFixed(2)}x is above break-even (${breakEvenRoas.toFixed(2)}x) but below the ${targetRoas?.toFixed(1) || '—'}x target — profitable but room to improve`, tag:'Below target'});
+    }
+  }
 
   // ROAS trend
   if (validROAS.length > 3) {
@@ -1498,11 +1613,11 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
   }
 
   // Frequency warning
-  if (freq > 3.5) insights.push({type:'warn', text:`Frequency at ${freq.toFixed(2)} — audiences are seeing ads more than 3.5 times on average. Consider refreshing creatives or expanding audiences`, tag:'Ad fatigue'});
-  else if (freq > 2.5) insights.push({type:'warn', text:`Frequency at ${freq.toFixed(2)} — worth monitoring for signs of creative fatigue over the coming days`, tag:'Monitor freq.'});
+  if (freq > 3.5) insights.push({type:'bad', text:`Frequency at ${freq.toFixed(2)} — audiences are seeing ads more than 3.5x on average. Refresh creatives or expand audiences urgently`, tag:'Ad fatigue'});
+  else if (freq > 2.5) insights.push({type:'warn', text:`Frequency at ${freq.toFixed(2)} — approaching fatigue. Monitor CTR trend closely and prepare fresh creative variants`, tag:'Monitor freq.'});
 
   // CTR signal
-  if (ctr < 1.0) insights.push({type:'warn', text:`CTR of ${ctr.toFixed(2)}% is below 1% — creatives may not be resonating or audiences may need refreshing`, tag:'Low CTR'});
+  if (ctr < 1.0) insights.push({type:'bad', text:`CTR of ${ctr.toFixed(2)}% is below 1% — creatives may not be resonating or audiences may need refreshing`, tag:'Low CTR'});
   else if (ctr > 2.5) insights.push({type:'ok', text:`CTR of ${ctr.toFixed(2)}% is strong — creatives are generating good engagement relative to impressions`, tag:'Strong CTR'});
 
   // ROAS variance — flag volatile days
@@ -1512,8 +1627,12 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
     if (max > min * 2.5) insights.push({type:'warn', text:`ROAS swings significantly day-to-day (low: ${min.toFixed(2)}x, high: ${max.toFixed(2)}x) — worth reviewing what drove the best days`, tag:'High variance'});
   }
 
-  // CPA vs AOV
-  if (aov > 0 && cpa > aov * 0.5) insights.push({type:'warn', text:`CPA (${fmt(cpa)}) is more than 50% of AOV (${fmt(aov)}) — customer acquisition cost is high relative to order value`, tag:'CPA watch'});
+  // CPA vs AOV — flag if CPA is eating into margin
+  if (aov > 0 && cpa > 0) {
+    const cpaPct = cpa / aov * 100;
+    if (cpaPct > 50) insights.push({type:'warn', text:`CPA (${fmt(cpa)}) is ${cpaPct.toFixed(0)}% of AOV (${fmt(aov)}) — acquisition cost is high relative to order value, reducing margin headroom`, tag:'CPA:AOV ratio'});
+    else if (cpaPct < 20) insights.push({type:'ok', text:`CPA (${fmt(cpa)}) is only ${cpaPct.toFixed(0)}% of AOV (${fmt(aov)}) — strong margin efficiency on acquisitions`, tag:'Efficient CPA'});
+  }
 
   // Best performing day
   const bestIdx = roasData.reduce((bi, v, i) => (v !== null && (bi === -1 || v > roasData[bi])) ? i : bi, -1);
