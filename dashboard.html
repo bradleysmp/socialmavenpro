@@ -1525,164 +1525,146 @@ function buildInsights(roas, cpa, aov, ctr, freq, sorted, roasData, totalSpend, 
 // ─── UNIFIED PRODUCT SCORECARD ───────────────────────────────
 function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant) {
 
-  // ── Meta product lookup (aggregate variants by base slug)
+  // ── Build Merchant lookups (by numeric ID)
+  const catMap = {};
+  (merchantCat||[]).forEach(r => { const id=r.product_id||''; if(!catMap[id]) catMap[id]=r; });
+  const stockMap = {};
+  (merchantStock||[]).forEach(r => { const id=r.product_id||''; stockMap[id]=(stockMap[id]||0)+parseInt(r.product_sell_on_google_quantity||0); });
+
+  // ── Build GA4 lookup by item_id (slug-based for Fragrance Samples)
+  const ga4Map = {};
+  (ga4Rows||[]).forEach(r => { const id=(r.item_id||'').toLowerCase().trim(); if(id) ga4Map[id]=r; });
+
+  // ── Aggregate Meta by product ID
   const metaMap = {};
   (metaRows||[]).forEach(r => {
     const pid = r.product_id||'';
-    const slug = pid.includes(',') ? pid.split(',')[0].trim() : pid;
-    const fullName = pid.includes(',') ? pid.split(',')[1].trim() : pid;
+    // Handle "slug, Name" format (Fragrance Samples) vs plain numeric ID (CP/Decorum)
+    const id = pid.includes(',') ? pid.split(',')[0].trim() : pid;
+    const fullName = pid.includes(',') ? pid.split(',')[1].trim() : '';
     const name = fullName
-      .replace(/ - \d+ML SPRAY SAMPLE$/i,'')
-      .replace(/ - \d+ML TRAVEL SPRAY$/i,'')
-      .replace(/ - \d+ML EDP$/i,'')
-      .trim();
-    if (!metaMap[slug]) metaMap[slug] = {slug, name, spend:0, impressions:0, clicks:0};
-    metaMap[slug].spend       += parseFloat(r.spend||0);
-    metaMap[slug].impressions += parseFloat(r.impressions||0);
-    metaMap[slug].clicks      += parseFloat(r.clicks||0);
+      .replace(/ - \d+ML SPRAY SAMPLE$/i,'').replace(/ - \d+ML TRAVEL SPRAY$/i,'')
+      .replace(/ - \d+ML EDP$/i,'').trim();
+    if (!metaMap[id]) metaMap[id] = {id, name, spend:0, impressions:0, clicks:0};
+    metaMap[id].spend       += parseFloat(r.spend||0);
+    metaMap[id].impressions += parseFloat(r.impressions||0);
+    metaMap[id].clicks      += parseFloat(r.clicks||0);
   });
 
-  // ── GA4 lookup by item_id
-  const ga4Map = {};
-  (ga4Rows||[]).forEach(r => {
-    const id = (r.item_id||'').toLowerCase().trim();
-    if (id) ga4Map[id] = r;
-  });
+  // ── Join and build product list — top 100 by spend
+  const allProducts = Object.values(metaMap)
+    .filter(m => m.spend > 0)
+    .sort((a,b) => b.spend - a.spend)
+    .slice(0, 100);
 
-  // ── Merchant catalog & stock lookup
-  const catMap = {};
-  (merchantCat||[]).forEach(r => {
-    const id = r.product_id||'';
-    if (!catMap[id]) catMap[id] = r;
-  });
-  const stockMap = {};
-  (merchantStock||[]).forEach(r => {
-    const id = r.product_id||'';
-    stockMap[id] = (stockMap[id]||0) + parseInt(r.product_sell_on_google_quantity||0);
-  });
+  const joined = allProducts.map(m => {
+    const idLower = m.id.toLowerCase();
+    const baseSlug = m.id.split('-').slice(0,-1).join('-').toLowerCase();
 
-  // ── Join everything
-  const joined = [];
-  Object.values(metaMap).forEach(m => {
-    const slugLower = m.slug.toLowerCase();
-    const baseSlug  = m.slug.split('-').slice(0,-1).join('-').toLowerCase();
+    // Merchant join by numeric ID
+    const cat = catMap[m.id] || null;
+    const qty = stockMap[m.id] || 0;
 
-    // GA4 join
-    const ga4 = ga4Map[slugLower] || ga4Map[baseSlug] || null;
-
-    // Merchant join (exact or without variant suffix)
-    const cat   = catMap[m.slug] || catMap[m.slug.split('-').slice(0,-1).join('-')] || null;
-    const qty   = stockMap[m.slug] || stockMap[m.slug.split('-').slice(0,-1).join('-')] || 0;
+    // GA4 join by slug (works for Fragrance Samples, won't match for CP/Decorum)
+    const ga4 = ga4Map[idLower] || ga4Map[baseSlug] || null;
 
     // Meta signals
-    const metaCtr  = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
-    const metaCpc  = m.clicks > 0 ? m.spend/m.clicks : 0;
+    const metaCtr = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
+    const metaCpc = m.clicks > 0 ? m.spend/m.clicks : 0;
 
-    // GA4 signals
-    const ptv         = ga4 ? parseFloat(ga4.purchase_to_view_rate||0)*100 : 0;
-    const ctv         = ga4 ? parseFloat(ga4.cart_to_view_rate||0)*100 : 0;
-    const ga4Purchases= ga4 ? parseFloat(ga4.items_purchased||0) : 0;
-    const ga4Revenue  = ga4 ? parseFloat(ga4.item_revenue||0) : 0;
-    const ga4Views    = ga4 ? parseFloat(ga4.items_viewed||0) : 0;
-    const ga4Atc      = ga4 ? parseFloat(ga4.items_added_to_cart||0) : 0;
-    const ga4Name     = ga4 ? (ga4.item_name||'') : '';
+    // GA4 signals (only populated for Fragrance Samples)
+    const ptv          = ga4 ? parseFloat(ga4.purchase_to_view_rate||0)*100 : null;
+    const ctv          = ga4 ? parseFloat(ga4.cart_to_view_rate||0)*100 : null;
+    const ga4Purchases = ga4 ? parseFloat(ga4.items_purchased||0) : null;
+    const ga4Revenue   = ga4 ? parseFloat(ga4.item_revenue||0) : null;
+    const ga4Views     = ga4 ? parseFloat(ga4.items_viewed||0) : null;
+    const impliedCpa   = ptv && ptv > 0 ? metaCpc/(ptv/100) : null;
 
-    // Implied CPA — what Meta is costing to drive one purchase (CPC / PTV%)
-    const impliedCpa = ptv > 0 ? metaCpc / (ptv/100) : null;
-
-    // Stock
+    // Merchant signals
     const available = (cat?.product_availability||'').toLowerCase();
-    const inStock   = !hasMerchant || available === 'in stock' || available === 'in_stock' || available === '';
+    const inStock   = !hasMerchant || ['in stock','in_stock',''].includes(available);
     const price     = cat ? parseFloat(cat.product_price||0) : 0;
+    const thumb     = cat?.product_thumbnail_link || '';
+    const displayName = cat?.product_title || m.name || m.id;
 
     let stockSignal = null, stockColor = 'var(--text3)';
     if (hasMerchant) {
-      if (!inStock)          { stockSignal='Out of stock'; stockColor='var(--red)'; }
-      else if (qty>0&&qty<=5){ stockSignal='Low stock';    stockColor='var(--amber)'; }
-      else                   { stockSignal='In stock';     stockColor='var(--green)'; }
+      if (!inStock)           { stockSignal='Out of stock'; stockColor='var(--red)'; }
+      else if (qty>0&&qty<=5) { stockSignal='Low stock';    stockColor='var(--amber)'; }
+      else                    { stockSignal='In stock';     stockColor='var(--green)'; }
     }
 
-    // Score — Meta-relevant only, purchase volume as primary demand signal
+    // ── Score
     let score = 0;
-    // GA4 purchase volume (primary demand signal)
-    if (ga4Purchases >= 20) score += 30;
-    else if (ga4Purchases >= 10) score += 20;
-    else if (ga4Purchases >= 5)  score += 12;
-    else if (ga4Purchases >= 1)  score += 6;
-    // PTV% — converts when people land
-    if (ptv >= 10) score += 25;
-    else if (ptv >= 5) score += 15;
-    else if (ptv >= 2) score += 7;
-    // CTV% — intent signal
-    if (ctv >= 20) score += 15;
-    else if (ctv >= 10) score += 8;
-    else if (ctv >= 5)  score += 4;
-    // Meta CTR — ad engagement
-    if (metaCtr >= 3) score += 20;
-    else if (metaCtr >= 2) score += 14;
-    else if (metaCtr >= 1) score += 7;
-    // CPC efficiency — lower is better
-    if (metaCpc > 0 && metaCpc < 0.2) score += 10;
-    else if (metaCpc < 0.5) score += 5;
+    // CTR — primary signal for Meta product performance
+    if (metaCtr >= 4)      score += 30;
+    else if (metaCtr >= 2) score += 20;
+    else if (metaCtr >= 1) score += 10;
+    // CPC efficiency
+    if (metaCpc > 0 && metaCpc <= 0.20)      score += 20;
+    else if (metaCpc <= 0.35) score += 12;
+    else if (metaCpc <= 0.50) score += 6;
+    // Spend volume (proxy for Meta confidence in this product)
+    if (m.spend >= 50)      score += 15;
+    else if (m.spend >= 20) score += 10;
+    else if (m.spend >= 5)  score += 5;
+    // GA4 signals (Fragrance Samples only)
+    if (ga4Purchases !== null) {
+      if (ga4Purchases >= 10) score += 20;
+      else if (ga4Purchases >= 3) score += 12;
+      else if (ga4Purchases >= 1) score += 6;
+    }
+    if (ptv !== null) {
+      if (ptv >= 10) score += 15;
+      else if (ptv >= 5) score += 8;
+    }
     // Stock penalty
-    if (hasMerchant && !inStock) score = Math.min(score, 5);
-    if (hasMerchant && stockSignal === 'Low stock') score = Math.min(score, 40);
+    if (hasMerchant && !inStock)          score = Math.min(score, 5);
+    if (hasMerchant && stockSignal==='Low stock') score = Math.min(score, 40);
     score = Math.min(100, Math.round(score));
 
-    // Recommendation
+    // ── Recommendation
     let rec, recColor, recReason;
     if (hasMerchant && !inStock && m.spend > 0) {
       rec='Exclude — out of stock'; recColor='var(--red)';
       recReason='Active Meta spend on out-of-stock product — exclude from DPA feed immediately';
-    } else if (hasMerchant && !inStock) {
-      rec='Out of stock'; recColor='var(--text3)';
-      recReason='Not in stock — no action needed unless spend resumes';
-    } else if (score >= 70) {
+    } else if (score >= 65) {
       rec='Scale in DPA'; recColor='var(--green)';
-      recReason=ga4Purchases>=10?`${Math.round(ga4Purchases)} purchases + ${ptv.toFixed(1)}% PTV — strong demand signal, increase DPA budget`:`Strong CTR (${metaCtr.toFixed(2)}%) and ${ptv.toFixed(1)}% PTV — prioritise in feed`;
-    } else if (m.spend > 2 && ptv < 2 && ga4Purchases === 0) {
-      rec='Review or pause'; recColor='var(--red)';
-      recReason='Active spend but zero GA4 purchases and low PTV — likely poor landing page or wrong audience';
-    } else if (hasMerchant && stockSignal === 'Low stock') {
+      recReason=metaCtr>=3?`${metaCtr.toFixed(2)}% CTR and low CPC — strong ad engagement, increase budget`:`High engagement and spend efficiency — prioritise in DPA feed`;
+    } else if (score >= 40) {
+      rec='Good candidate'; recColor='var(--amber)';
+      recReason='Solid signals — keep in feed and monitor';
+    } else if (m.spend > 10 && metaCtr < 1) {
+      rec='Review — low CTR'; recColor='var(--red)';
+      recReason=`Only ${metaCtr.toFixed(2)}% CTR despite active spend — creative or product may not resonate`;
+    } else if (hasMerchant && stockSignal==='Low stock') {
       rec='Low stock — watch'; recColor='var(--amber)';
       recReason=`Only ${qty} units remaining — consider excluding before stock runs out`;
-    } else if (score >= 45) {
-      rec='Good candidate'; recColor='var(--amber)';
-      recReason='Decent signals — keep in feed and monitor for scaling opportunity';
-    } else if (impliedCpa && price > 0 && impliedCpa > price) {
-      rec='Check efficiency'; recColor='var(--amber)';
-      recReason=`Implied CPA (${fmt(impliedCpa)}) exceeds product price (${fmt(price)}) — may not be profitable`;
     } else {
       rec='Monitor'; recColor='var(--text3)';
-      recReason='Insufficient signals — keep in feed but no action needed';
+      recReason='Insufficient signals to act on — keep in feed';
     }
 
-    const displayName = ga4Name || m.name || m.slug;
-    const thumb = cat?.product_thumbnail_link || '';
-
-    joined.push({
-      slug: m.slug, name: displayName, thumb, price,
-      inStock, qty, stockSignal, stockColor,
-      metaSpend: m.spend, metaCtr, metaCpc,
-      ptv, ctv, ga4Purchases, ga4Revenue, ga4Views, ga4Atc,
-      impliedCpa, score, rec, recColor, recReason, hasMerchant
-    });
+    return { id:m.id, name:displayName, thumb, price, inStock, qty, stockSignal, stockColor,
+             metaSpend:m.spend, metaCtr, metaCpc, ptv, ctv, ga4Purchases, ga4Revenue, ga4Views,
+             impliedCpa, score, rec, recColor, recReason };
   });
 
-  joined.sort((a,b) => b.score - a.score);
+  // Determine which columns to show
+  const hasGA4Data = joined.some(p => p.ptv !== null);
   window._dpaProducts = joined;
+  window._dpaHasMerchant = hasMerchant;
+  window._dpaHasGA4 = hasGA4Data;
 
-  const totalSpend     = joined.reduce((s,p)=>s+p.metaSpend,0);
-  const scaleCount     = joined.filter(p=>p.rec==='Scale in DPA').length;
-  const reviewCount    = joined.filter(p=>p.rec==='Review or pause').length;
-  const excludeCount   = joined.filter(p=>p.rec.startsWith('Exclude')).length;
-  const topProduct     = joined[0];
-  const matchedCount   = joined.filter(p=>p.ga4Purchases>0||p.ptv>0).length;
+  const scaleCount   = joined.filter(p=>p.rec==='Scale in DPA').length;
+  const reviewCount  = joined.filter(p=>p.rec.startsWith('Review')).length;
+  const excludeCount = joined.filter(p=>p.rec.startsWith('Exclude')).length;
+  const topProduct   = joined[0];
 
   const sorts = [
-    ['score','Score'],['metaSpend','Meta Spend'],['ga4Purchases','GA4 Purchases'],
-    ['ptv','PTV %'],['ctv','CTV %'],['metaCtr','Meta CTR'],['ga4Revenue','GA4 Revenue'],
-    ...(hasMerchant?[['qty','Stock Qty'],['price','Price']]:[])
+    ['score','Score'],['metaSpend','Meta Spend'],['metaCtr','Meta CTR'],['metaCpc','Meta CPC'],
+    ...(hasGA4Data?[['ga4Purchases','GA4 Purchases'],['ptv','PTV %']]:[]),
+    ...(hasMerchant?[['qty','Stock Qty'],['price','Price']]:[]),
   ];
 
   const html = `<div class="fade-in" style="padding:0">
@@ -1691,8 +1673,9 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">Product Scorecard</div>
           <div style="font-size:12px;color:var(--text3);">
-            Meta DPA × GA4${hasMerchant?' × Merchant Center':''} · ${joined.length} products · ${matchedCount} with GA4 data
-            ${hasMerchant?'<span style="margin-left:6px;padding:2px 7px;border-radius:3px;background:rgba(29,158,117,0.15);color:var(--green);font-size:10px;font-weight:500;">Stock data available</span>':''}
+            Top 100 products by Meta spend
+            ${hasMerchant?'<span style="margin-left:6px;padding:2px 7px;border-radius:3px;background:rgba(66,133,244,0.15);color:#4285F4;font-size:10px;font-weight:500;">+ Stock data</span>':''}
+            ${hasGA4Data?'<span style="margin-left:4px;padding:2px 7px;border-radius:3px;background:rgba(29,158,117,0.15);color:var(--green);font-size:10px;font-weight:500;">+ GA4</span>':''}
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1706,16 +1689,16 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
       </div>
 
       <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Products scored', joined.length.toLocaleString(), `£${totalSpend.toFixed(0)} Meta spend`, '')}
-        ${metricCard('Scale in DPA', scaleCount.toString(), 'score ≥70 · strong demand', scaleCount>0?'var(--green)':'var(--text3)')}
-        ${metricCard('Review or pause', reviewCount.toString(), 'spend · no conversion signal', reviewCount>0?'var(--red)':'var(--text3)')}
-        ${hasMerchant?metricCard('Exclude from feed', excludeCount.toString(), 'out of stock + active spend', excludeCount>0?'var(--red)':'var(--text3)'):''}
+        ${metricCard('Products shown', joined.length.toString(), 'top 100 by Meta spend', '')}
+        ${metricCard('Scale in DPA', scaleCount.toString(), 'strong CTR + efficiency', scaleCount>0?'var(--green)':'var(--text3)')}
+        ${metricCard('Review', reviewCount.toString(), 'spend with weak signals', reviewCount>0?'var(--red)':'var(--text3)')}
+        ${hasMerchant?metricCard('Exclude', excludeCount.toString(), 'out of stock + active spend', excludeCount>0?'var(--red)':'var(--text3)'):''}
         ${topProduct?metricCard('Top product', truncate(topProduct.name,20), `Score ${topProduct.score}/100`, 'var(--orange)'):''}
       </div>
 
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--text3);">
-        <span><strong style="color:var(--text)">Score</strong> GA4 purchase volume + PTV% + CTV% + Meta CTR + CPC efficiency${hasMerchant?' + stock':''}</span>
-        <span><strong style="color:var(--text)">PTV</strong> purchase-to-view % · <strong style="color:var(--text)">CTV</strong> cart-to-view % · <strong style="color:var(--text)">Implied CPA</strong> Meta CPC ÷ PTV%</span>
+      <div style="font-size:11px;color:var(--text3);padding:8px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:14px;">
+        <strong style="color:var(--text)">Score</strong> Meta CTR + CPC efficiency + spend volume${hasGA4Data?' + GA4 purchase volume + PTV%':''}${hasMerchant?' + stock status':''}
+        &nbsp;·&nbsp; <strong style="color:var(--text)">Implied CPA</strong> Meta CPC ÷ PTV% (estimated cost to drive one purchase)
       </div>
     </div>
 
@@ -1727,11 +1710,12 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CPC</th>
+          ${hasGA4Data?`
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">PTV %</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">CTV %</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">GA4 Purchases</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA4 Revenue</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Implied CPA</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Implied CPA</th>`:''}
           ${hasMerchant?`
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Price</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">Stock</th>
@@ -1739,7 +1723,7 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:160px;">Recommendation</th>
         </tr></thead>
         <tbody id="dpa-tbody">
-          ${renderDPARows(joined, hasMerchant)}
+          ${renderDPARows(joined, hasMerchant, hasGA4Data)}
         </tbody>
       </table>
     </div>
@@ -1748,30 +1732,33 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   document.getElementById('content').innerHTML = html;
 }
 
-function renderDPARows(products, hasMerchant) {
-  return products.slice(0,150).map(p => `
+function renderDPARows(products, hasMerchant, hasGA4Data) {
+  const hm = hasMerchant !== undefined ? hasMerchant : window._dpaHasMerchant;
+  const hg = hasGA4Data  !== undefined ? hasGA4Data  : window._dpaHasGA4;
+  return products.map(p => `
     <tr style="border-bottom:1px solid var(--border);transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:10px 12px;">
         <div style="display:flex;align-items:center;gap:10px;">
           ${p.thumb?`<img src="${p.thumb}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;background:var(--bg4);" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:3px;background:var(--bg4);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3);">${(p.name||'').slice(0,2).toUpperCase()}</div>`}
           <div>
-            <div style="font-size:12px;font-weight:500;color:var(--text);">${truncate(p.name,38)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.slug}</div>
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${truncate(p.name,40)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.id}</div>
           </div>
         </div>
       </td>
       <td style="padding:10px 8px;text-align:center;">
-        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=70?'rgba(29,158,117,0.15)':p.score>=45?'rgba(201,123,10,0.15)':p.score>=25?'rgba(90,88,86,0.15)':'var(--bg4)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=70?'var(--green)':p.score>=45?'var(--amber)':p.score>=25?'var(--text2)':'var(--text3)'};">${p.score}</div>
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=65?'rgba(29,158,117,0.15)':p.score>=40?'rgba(201,123,10,0.15)':'rgba(90,88,86,0.12)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=65?'var(--green)':p.score>=40?'var(--amber)':'var(--text3)'};">${p.score}</div>
       </td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaSpend>0?'var(--text2)':'var(--text3)'};">${p.metaSpend>0?fmt(p.metaSpend):'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCtr>=2?'var(--green)':p.metaCtr>=1?'var(--text2)':p.metaSpend>0?'var(--red)':'var(--text3)'};">${p.metaSpend>0?p.metaCtr.toFixed(2)+'%':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.metaCpc>0?fmt(p.metaCpc):'-'}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.metaSpend)}</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.metaCtr>=3?'var(--green)':p.metaCtr>=1.5?'var(--amber)':'var(--red)'};">${p.metaCtr.toFixed(2)}%</td>
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCpc<=0.25?'var(--green)':p.metaCpc<=0.5?'var(--text2)':'var(--amber)'};">${fmt(p.metaCpc)}</td>
+      ${hg?`
       <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ptv>=10?'var(--green)':p.ptv>=5?'var(--amber)':p.ga4Views>0?'var(--red)':'var(--text3)'};">${p.ga4Views>0?p.ptv.toFixed(1)+'%':'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctv>=20?'var(--green)':p.ctv>=10?'var(--amber)':'var(--text3)'};">${p.ga4Views>0?p.ctv.toFixed(1)+'%':'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ga4Purchases>=10?'var(--green)':p.ga4Purchases>=3?'var(--amber)':'var(--text3)'};">${p.ga4Purchases>0?Math.round(p.ga4Purchases):'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.ga4Revenue>0?fmt(p.ga4Revenue):'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.impliedCpa&&p.price>0&&p.impliedCpa>p.price?'var(--red)':p.impliedCpa?'var(--text2)':'var(--text3)'};">${p.impliedCpa?fmt(p.impliedCpa):'-'}</td>
-      ${hasMerchant?`
+      <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.impliedCpa&&p.price>0&&p.impliedCpa>p.price?'var(--red)':p.impliedCpa?'var(--text2)':'var(--text3)'};">${p.impliedCpa?fmt(p.impliedCpa):'-'}</td>`:''}
+      ${hm?`
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.price>0?'£'+p.price.toFixed(2):'-'}</td>
       <td style="padding:10px 8px;text-align:center;font-size:11px;font-weight:500;color:${p.stockColor};">${p.stockSignal||'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.qty>0&&p.qty<=5?'var(--amber)':'var(--text2)'};">${p.qty>0?p.qty:'-'}</td>`:''}
@@ -1792,8 +1779,7 @@ function sortDPA(field) {
 function filterDPA(query) {
   if (!window._dpaProducts) return;
   const q = query.toLowerCase();
-  const hasMerchant = window._dpaProducts[0]?.hasMerchant || false;
-  const filtered = q ? window._dpaProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.slug||'').includes(q)) : window._dpaProducts;
+  const filtered = q ? window._dpaProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.id||'').toLowerCase().includes(q)) : window._dpaProducts;
   const tbody = document.getElementById('dpa-tbody');
   if (tbody) tbody.innerHTML = renderDPARows(filtered, hasMerchant);
 }
