@@ -932,9 +932,9 @@ async function loadData() {
       const merchantId = Object.entries(CLIENTS.merchant).find(([k,v])=>v===state.client)?.[0];
       const hasMerchant = !!merchantId;
 
-      // Use selected period for GA4/Merchant but cap Meta DPA at 30d max
-      // to avoid timeout on large product catalogues
-      const dpaMetaPeriod = (state.period === 'last_3m' || state.period === 'last_year') ? 'last_30d' : state.period;
+      // Proxy aggregates by product_id and returns top 100 by spend server-side
+      // so all periods work safely regardless of response size
+      const dpaMetaPeriod = state.period;
       const dpaMetaFrom = state.dateFrom;
       const dpaMetaTo = state.dateTo;
 
@@ -1671,7 +1671,7 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     metaMap[id].clicks      += parseFloat(r.clicks||0);
   });
 
-  // ── Join and build product list — top 100 by spend
+  // ── Join and build product list — top 100 by spend, hide out-of-stock
   const allProducts = Object.values(metaMap)
     .filter(m => m.spend > 0)
     .sort((a,b) => b.spend - a.spend)
@@ -1700,7 +1700,7 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     const ga4Views     = ga4 ? parseFloat(ga4.items_viewed||0) : null;
     const impliedCpa   = ptv && ptv > 0 ? metaCpc/(ptv/100) : null;
 
-    // Merchant signals
+    // Stock signals
     const available = (cat?.product_availability||'').toLowerCase();
     const inStock   = !hasMerchant || ['in stock','in_stock',''].includes(available);
     const price     = cat ? parseFloat(cat.product_price||0) : 0;
@@ -1714,61 +1714,78 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
       else                    { stockSignal='In stock';     stockColor='var(--green)'; }
     }
 
-    // ── Score
+    // ── Score — spend is primary, efficiency signals secondary
     let score = 0;
-    // CTR — primary signal for Meta product performance
-    if (metaCtr >= 4)      score += 30;
-    else if (metaCtr >= 2) score += 20;
-    else if (metaCtr >= 1) score += 10;
-    // CPC efficiency
-    if (metaCpc > 0 && metaCpc <= 0.20)      score += 20;
-    else if (metaCpc <= 0.35) score += 12;
-    else if (metaCpc <= 0.50) score += 6;
-    // Spend volume (proxy for Meta confidence in this product)
-    if (m.spend >= 50)      score += 15;
-    else if (m.spend >= 20) score += 10;
-    else if (m.spend >= 5)  score += 5;
-    // GA4 signals (Fragrance Samples only)
+
+    // Spend volume — primary signal (Meta is already betting on this product)
+    if (m.spend >= 100)     score += 35;
+    else if (m.spend >= 50) score += 28;
+    else if (m.spend >= 20) score += 20;
+    else if (m.spend >= 10) score += 12;
+    else if (m.spend >= 5)  score += 6;
+    else                    score += 3;
+
+    // CPC efficiency — lower is better, more clicks per £
+    if (metaCpc > 0 && metaCpc <= 0.20)  score += 20;
+    else if (metaCpc <= 0.30)             score += 15;
+    else if (metaCpc <= 0.50)             score += 8;
+    else if (metaCpc <= 0.75)             score += 3;
+
+    // CTR — engagement signal
+    if (metaCtr >= 4)      score += 20;
+    else if (metaCtr >= 3) score += 15;
+    else if (metaCtr >= 2) score += 10;
+    else if (metaCtr >= 1) score += 5;
+
+    // GA4 signals — only for clients where the join works (Fragrance Samples)
     if (ga4Purchases !== null) {
-      if (ga4Purchases >= 10) score += 20;
-      else if (ga4Purchases >= 3) score += 12;
-      else if (ga4Purchases >= 1) score += 6;
+      if (ga4Purchases >= 20)     score += 20;
+      else if (ga4Purchases >= 10) score += 14;
+      else if (ga4Purchases >= 5)  score += 8;
+      else if (ga4Purchases >= 1)  score += 4;
     }
     if (ptv !== null) {
-      if (ptv >= 10) score += 15;
-      else if (ptv >= 5) score += 8;
+      if (ptv >= 15)     score += 15;
+      else if (ptv >= 8) score += 10;
+      else if (ptv >= 4) score += 5;
     }
-    // Stock penalty
-    if (hasMerchant && !inStock)          score = Math.min(score, 5);
-    if (hasMerchant && stockSignal==='Low stock') score = Math.min(score, 40);
+
+    // Low stock cap — don't recommend scaling something about to run out
+    if (hasMerchant && stockSignal === 'Low stock') score = Math.min(score, 45);
+
     score = Math.min(100, Math.round(score));
 
-    // ── Recommendation
+    // ── Recommendation — actionable and specific
     let rec, recColor, recReason;
-    if (hasMerchant && !inStock && m.spend > 0) {
-      rec='Exclude — out of stock'; recColor='var(--red)';
-      recReason='Active Meta spend on out-of-stock product — exclude from DPA feed immediately';
-    } else if (score >= 65) {
-      rec='Scale in DPA'; recColor='var(--green)';
-      recReason=metaCtr>=3?`${metaCtr.toFixed(2)}% CTR and low CPC — strong ad engagement, increase budget`:`High engagement and spend efficiency — prioritise in DPA feed`;
-    } else if (score >= 40) {
-      rec='Good candidate'; recColor='var(--amber)';
-      recReason='Solid signals — keep in feed and monitor';
-    } else if (m.spend > 10 && metaCtr < 1) {
-      rec='Review — low CTR'; recColor='var(--red)';
-      recReason=`Only ${metaCtr.toFixed(2)}% CTR despite active spend — creative or product may not resonate`;
-    } else if (hasMerchant && stockSignal==='Low stock') {
-      rec='Low stock — watch'; recColor='var(--amber)';
-      recReason=`Only ${qty} units remaining — consider excluding before stock runs out`;
+    if (score >= 65) {
+      rec = 'Scale in DPA'; recColor = 'var(--green)';
+      if (ga4Purchases !== null && ga4Purchases >= 5) {
+        recReason = `£${m.spend.toFixed(0)} spend · ${ga4Purchases} GA4 purchases · ${ptv?.toFixed(1)}% PTV — scale budget`;
+      } else {
+        recReason = `£${m.spend.toFixed(0)} spend · ${metaCtr.toFixed(2)}% CTR · £${metaCpc.toFixed(2)} CPC — strong efficiency, increase allocation`;
+      }
+    } else if (score >= 45) {
+      rec = 'Increase budget'; recColor = 'var(--amber)';
+      recReason = `Good signals — test a higher budget allocation and monitor CTR stability`;
+    } else if (m.spend >= 20 && metaCtr < 1) {
+      rec = 'Review creative'; recColor = 'var(--red)';
+      recReason = `£${m.spend.toFixed(0)} spend but only ${metaCtr.toFixed(2)}% CTR — product image or title may not be compelling enough`;
+    } else if (hasMerchant && stockSignal === 'Low stock') {
+      rec = 'Low stock — watch'; recColor = 'var(--amber)';
+      recReason = `Only ${qty} units left — monitor stock before increasing budget`;
+    } else if (m.spend < 10) {
+      rec = 'Untapped potential'; recColor = 'var(--text2)';
+      recReason = `Low Meta allocation — could be worth testing a higher budget to gather more signal`;
     } else {
-      rec='Monitor'; recColor='var(--text3)';
-      recReason='Insufficient signals to act on — keep in feed';
+      rec = 'Monitor'; recColor = 'var(--text3)';
+      recReason = `Keep in feed — not enough signal to act on yet`;
     }
 
     return { id:m.id, name:displayName, thumb, price, inStock, qty, stockSignal, stockColor,
              metaSpend:m.spend, metaCtr, metaCpc, ptv, ctv, ga4Purchases, ga4Revenue, ga4Views,
              impliedCpa, score, rec, recColor, recReason };
-  });
+  // Hide out-of-stock products entirely — no point showing what can't be sold
+  }).filter(p => !hasMerchant || p.inStock);
 
   // Determine which columns to show
   const hasGA4Data = joined.some(p => p.ptv !== null);
@@ -1776,10 +1793,11 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   window._dpaHasMerchant = hasMerchant;
   window._dpaHasGA4 = hasGA4Data;
 
-  const scaleCount   = joined.filter(p=>p.rec==='Scale in DPA').length;
-  const reviewCount  = joined.filter(p=>p.rec.startsWith('Review')).length;
-  const excludeCount = joined.filter(p=>p.rec.startsWith('Exclude')).length;
-  const topProduct   = joined[0];
+  const scaleCount      = joined.filter(p=>p.rec==='Scale in DPA').length;
+  const increaseCount   = joined.filter(p=>p.rec==='Increase budget').length;
+  const reviewCount     = joined.filter(p=>p.rec==='Review creative').length;
+  const untappedCount   = joined.filter(p=>p.rec==='Untapped potential').length;
+  const topProduct      = joined[0];
 
   const sorts = [
     ['score','Score'],['metaSpend','Meta Spend'],['metaCtr','Meta CTR'],['metaCpc','Meta CPC'],
@@ -1809,16 +1827,16 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
       </div>
 
       <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Products shown', joined.length.toString(), 'top 100 by Meta spend', '')}
-        ${metricCard('Scale in DPA', scaleCount.toString(), 'strong CTR + efficiency', scaleCount>0?'var(--green)':'var(--text3)')}
-        ${metricCard('Review', reviewCount.toString(), 'spend with weak signals', reviewCount>0?'var(--red)':'var(--text3)')}
-        ${hasMerchant?metricCard('Exclude', excludeCount.toString(), 'out of stock + active spend', excludeCount>0?'var(--red)':'var(--text3)'):''}
+        ${metricCard('Products shown', joined.length.toString(), 'top 100 · in stock only', '')}
+        ${metricCard('Scale in DPA', scaleCount.toString(), 'score ≥65 · strong signals', scaleCount>0?'var(--green)':'var(--text3)')}
+        ${metricCard('Increase budget', increaseCount.toString(), 'score 45–64 · good signals', increaseCount>0?'var(--amber)':'var(--text3)')}
+        ${metricCard('Untapped', untappedCount.toString(), 'low allocation · worth testing', untappedCount>0?'var(--text2)':'var(--text3)')}
         ${topProduct?metricCard('Top product', truncate(topProduct.name,20), `Score ${topProduct.score}/100`, 'var(--orange)'):''}
       </div>
 
       <div style="font-size:11px;color:var(--text3);padding:8px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:14px;">
-        <strong style="color:var(--text)">Score</strong> Meta CTR + CPC efficiency + spend volume${hasGA4Data?' + GA4 purchase volume + PTV%':''}${hasMerchant?' + stock status':''}
-        &nbsp;·&nbsp; <strong style="color:var(--text)">Implied CPA</strong> Meta CPC ÷ PTV% (estimated cost to drive one purchase)
+        <strong style="color:var(--text)">Score</strong> Spend volume + CPC efficiency + CTR${hasGA4Data?' + GA4 purchases + PTV%':''} · Out-of-stock hidden
+        ${hasGA4Data ? `&nbsp;·&nbsp; <strong style="color:var(--text)">Implied CPA</strong> Meta CPC ÷ PTV%` : ''}
       </div>
     </div>
 
