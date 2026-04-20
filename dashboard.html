@@ -924,7 +924,7 @@ async function loadData() {
 
       // Fetch sequentially to avoid gateway timeouts on large product catalogues
       showLoading('Fetching Meta product data…');
-      const metaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
+      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { strip_zero_spend: true }, dpaMetaFrom, dpaMetaTo);
 
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
