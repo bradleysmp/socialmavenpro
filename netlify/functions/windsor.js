@@ -18,63 +18,109 @@ exports.handler = async function(event) {
   try {
     const { api_key, connector, date_preset, date_from, date_to, fields, account_id, options, filters, strip_zero_spend, top_n_by_spend } = JSON.parse(event.body);
 
-    const params = new URLSearchParams();
-    params.append('api_key', api_key);
-    params.append('fields', fields);
-    // Connectors that need explicit dates instead of date presets
+    const now = new Date();
+    const fmtDate = (d) => d.toISOString().split('T')[0];
+    const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate()-n); return fmtDate(d); };
+    const monthStart = (offset=0) => fmtDate(new Date(now.getFullYear(), now.getMonth()+offset, 1));
+    const monthEnd   = (offset=0) => fmtDate(new Date(now.getFullYear(), now.getMonth()+offset+1, 0));
+
+    const presetMap = {
+      'last_7d':    [daysAgo(7),   daysAgo(1)],
+      'last_30d':   [daysAgo(30),  daysAgo(1)],
+      'last_3m':    [daysAgo(90),  daysAgo(1)],
+      'last_year':  [daysAgo(365), daysAgo(1)],
+      'this_month': [monthStart(),  fmtDate(now)],
+      'last_1m':    [monthStart(-1), monthEnd(-1)],
+    };
+
     const needsExplicitDates = ['google_merchant', 'googleanalytics'];
     const needsDates = needsExplicitDates.some(c => connector.startsWith(c));
 
-    let resolvedDateFrom = date_from;
-    let resolvedDateTo = date_to;
-
-    if (needsDates && date_preset && !date_from && !date_to) {
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; };
-      const monthStart = (offset=0) => { const d = new Date(now.getFullYear(), now.getMonth()+offset, 1); return d.toISOString().split('T')[0]; };
-      const monthEnd = (offset=0) => { const d = new Date(now.getFullYear(), now.getMonth()+offset+1, 0); return d.toISOString().split('T')[0]; };
-
-      const presetMap = {
-        'last_7d':   [daysAgo(7), daysAgo(1)],
-        'last_30d':  [daysAgo(30), daysAgo(1)],
-        'last_3m':   [daysAgo(90), daysAgo(1)],
-        'last_year': [daysAgo(365), daysAgo(1)],
-        'this_month':[monthStart(), today],
-        'last_1m':   [monthStart(-1), monthEnd(-1)],
-      };
-      const resolved = presetMap[date_preset];
-      if (resolved) { resolvedDateFrom = resolved[0]; resolvedDateTo = resolved[1]; }
+    let resolvedFrom = date_from;
+    let resolvedTo   = date_to;
+    if ((!resolvedFrom || !resolvedTo) && date_preset) {
+      const preset = presetMap[date_preset];
+      if (preset) { resolvedFrom = preset[0]; resolvedTo = preset[1]; }
     }
 
-    if (date_preset && !needsDates) params.append('date_preset', date_preset);
-    if (resolvedDateFrom) params.append('date_from', resolvedDateFrom);
-    if (resolvedDateTo) params.append('date_to', resolvedDateTo);
+    // ── PRODUCT MODE: fetch day-by-day to avoid Windsor timeouts on large catalogues
+    if (top_n_by_spend && resolvedFrom && resolvedTo) {
+      const days = [];
+      const start = new Date(resolvedFrom + 'T00:00:00Z');
+      const end   = new Date(resolvedTo   + 'T00:00:00Z');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+        days.push(fmtDate(new Date(d)));
+      }
 
-    // Connectors that support account_id filtering via filter param
+      const productMap = {};
+
+      for (const day of days) {
+        const p = new URLSearchParams();
+        p.append('api_key', api_key);
+        p.append('fields', fields);
+        p.append('date_from', day);
+        p.append('date_to', day);
+        if (account_id) {
+          p.append('account_id', account_id);
+          p.append('filter', JSON.stringify([['accountid', 'eq', account_id], 'and', ['spend', 'gt', 0]]));
+        } else {
+          p.append('filter', JSON.stringify([['spend', 'gt', 0]]));
+        }
+
+        try {
+          const res = await fetch(`https://connectors.windsor.ai/${connector}?${p}`);
+          if (!res.ok) continue;
+          const rows = await res.json();
+          if (!Array.isArray(rows)) continue;
+          rows.forEach(r => {
+            const pid   = r.product_id || '';
+            const spend = parseFloat(r.spend || 0);
+            if (!pid || spend <= 0) return;
+            if (!productMap[pid]) productMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
+            productMap[pid].spend       += spend;
+            productMap[pid].impressions += parseFloat(r.impressions || 0);
+            productMap[pid].clicks      += parseFloat(r.clicks || 0);
+          });
+        } catch(e) { continue; }
+      }
+
+      const data = Object.values(productMap)
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, top_n_by_spend);
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify(data),
+      };
+    }
+
+    // ── STANDARD PATH
+    const params = new URLSearchParams();
+    params.append('api_key', api_key);
+    params.append('fields', fields);
+
+    if (resolvedFrom) params.append('date_from', resolvedFrom);
+    if (resolvedTo)   params.append('date_to',   resolvedTo);
+    if (!resolvedFrom && !resolvedTo && date_preset && !needsDates) params.append('date_preset', date_preset);
+
     const filterableConnectors = ['facebook', 'pinterest', 'tiktok', 'google_ads'];
     const supportsFilter = filterableConnectors.some(c => connector.startsWith(c));
 
     if (account_id) {
       params.append('account_id', account_id);
-      if (supportsFilter) {
-        params.append('filter', JSON.stringify([['accountid', 'eq', account_id]]));
-      }
+      if (supportsFilter) params.append('filter', JSON.stringify([['accountid', 'eq', account_id]]));
     }
 
-    if (filters) {
-      params.append('filter', JSON.stringify(filters));
-    }
+    if (filters) params.append('filter', JSON.stringify(filters));
 
     if (options && typeof options === 'object') {
       Object.entries(options).forEach(([k, v]) => {
-        // These are proxy-only flags, don't forward to Windsor
         if (k !== 'strip_zero_spend' && k !== 'top_n_by_spend') params.append(k, v);
       });
     }
 
-    const url = `https://connectors.windsor.ai/${connector}?${params}`;
-    const response = await fetch(url);
+    const response = await fetch(`https://connectors.windsor.ai/${connector}?${params}`);
 
     if (!response.ok) {
       const text = await response.text();
@@ -87,39 +133,27 @@ exports.handler = async function(event) {
 
     let data = await response.json();
 
-    // Strip zero-spend rows to reduce payload size for product-level requests
     const shouldStrip = strip_zero_spend || (options && options.strip_zero_spend);
     if (shouldStrip && Array.isArray(data)) {
       data = data.filter(r => parseFloat(r.spend || 0) > 0);
     }
 
-    // Limit to top N rows by spend — drastically reduces payload for large product catalogues
-    if (top_n_by_spend && Array.isArray(data)) {
-      data = data
-        .filter(r => parseFloat(r.spend || 0) > 0)
-        .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
-        .slice(0, top_n_by_spend);
-    }
-
-    // Safety net — filter by account_id client-side in case Windsor returns mixed accounts
     if (account_id && Array.isArray(data)) {
-      const filtered = data.filter(r => {
-        const rid = String(r.account_id || r.accountid || '');
-        return rid === '' || rid === String(account_id);
-      });
-      // Only apply filter if it doesn't remove everything (i.e. account_id field exists)
       const hasAccountField = data.some(r => r.account_id || r.accountid);
-      data = hasAccountField ? filtered : data;
+      if (hasAccountField) {
+        data = data.filter(r => {
+          const rid = String(r.account_id || r.accountid || '');
+          return rid === '' || rid === String(account_id);
+        });
+      }
     }
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify(data),
     };
+
   } catch (err) {
     return {
       statusCode: 500,
