@@ -944,29 +944,8 @@ async function loadData() {
 
       // Fetch sequentially to avoid gateway timeouts on large product catalogues
       showLoading('Fetching Meta product data…');
-      // Try direct fetch first (bypasses Netlify proxy size limit)
-      // Falls back to proxy if CORS blocks it
-      let metaRows;
-      try {
-        const raw = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
-        // Aggregate by product_id client-side and take top 100 by spend
-        const productMap = {};
-        raw.forEach(r => {
-          const pid = r.product_id || '';
-          const spend = parseFloat(r.spend || 0);
-          if (!pid || spend <= 0) return;
-          if (!productMap[pid]) productMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
-          productMap[pid].spend       += spend;
-          productMap[pid].impressions += parseFloat(r.impressions || 0);
-          productMap[pid].clicks      += parseFloat(r.clicks || 0);
-        });
-        metaRows = Object.values(productMap)
-          .sort((a, b) => b.spend - a.spend)
-          .slice(0, 100);
-      } catch(e) {
-        // CORS blocked — fall back to proxy with server-side aggregation
-        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { strip_zero_spend: true, top_n_by_spend: 100 }, dpaMetaFrom, dpaMetaTo);
-      }
+      // Proxy fetches day-by-day and aggregates to top 100 server-side
+      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100 }, dpaMetaFrom, dpaMetaTo);
 
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
