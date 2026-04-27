@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- SMPro Dashboard v1.4.2 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -517,7 +518,8 @@ let state = {
   charts: {}
 };
 
-if (state.apiKey) document.getElementById('api-key-input').value = state.apiKey;
+const apiInput = document.getElementById('api-key-input');
+if (state.apiKey && apiInput) apiInput.value = state.apiKey;
 
 // ─── PDF EXPORT ────────────────────────────────────────────
 function exportPDF() {
