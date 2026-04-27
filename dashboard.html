@@ -891,7 +891,8 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   params.append('fields', fields.join(','));
   if (accountId) {
     params.append('account_id', accountId);
-    params.append('filter', JSON.stringify([['accountid','eq',accountId],'and',['spend','gt',0]]));
+    // Only filter by spend — accountid filter causes issues with some connectors
+    params.append('filter', JSON.stringify([['spend','gt',0]]));
   } else {
     params.append('filter', JSON.stringify([['spend','gt',0]]));
   }
@@ -910,15 +911,21 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   }
 
   const url = `https://connectors.windsor.ai/${connector}?${params}`;
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch(e) {
+    // CORS or network error — fall back to proxy
+    throw new Error(`Windsor direct fetch failed (CORS/network): ${e.message}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Windsor API error: ${res.status} — ${text}`);
+    throw new Error(`Windsor API error: ${res.status} — ${text.slice(0,200)}`);
   }
-  const data = await res.json();
-  state.cache[cacheKey] = Array.isArray(data) ? data : (data.data || []);
-  return state.cache[cacheKey];
-}
+  const raw = await res.json();
+  const data = Array.isArray(raw) ? raw : (raw.data || []);
+  state.cache[cacheKey] = data;
+  return data;
 
 // ─── LOAD DATA ─────────────────────────────────────────────
 async function loadData() {
@@ -946,25 +953,7 @@ async function loadData() {
       const metaProductFields = ['product_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      // Fetch Meta product data directly from Windsor (bypasses Netlify proxy size limits)
-      showLoading('Fetching Meta product data…');
-      const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
-
-      // Aggregate by product_id client-side and take top 100 by spend
-      const metaProductMap = {};
-      rawMetaRows.forEach(r => {
-        const pid = r.product_id || '';
-        const spend = parseFloat(r.spend || 0);
-        if (!pid || spend <= 0) return;
-        if (!metaProductMap[pid]) metaProductMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
-        metaProductMap[pid].spend       += spend;
-        metaProductMap[pid].impressions += parseFloat(r.impressions || 0);
-        metaProductMap[pid].clicks      += parseFloat(r.clicks || 0);
-      });
-      const metaRows = Object.values(metaProductMap)
-        .sort((a, b) => b.spend - a.spend)
-        .slice(0, 100);
-
+      // Fetch GA4 and Merchant first (these go through proxy fine — small responses)
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
 
@@ -979,6 +968,30 @@ async function loadData() {
             ['product_id','product_sell_on_google_quantity'],
             state.period, {}, state.dateFrom, state.dateTo),
         ]);
+      }
+
+      // Fetch Meta product data — try direct browser call first (no proxy size limits)
+      // Falls back to proxy with server-side aggregation if CORS blocks direct call
+      showLoading('Fetching Meta product data…');
+      let metaRows;
+      try {
+        const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
+        const metaProductMap = {};
+        rawMetaRows.forEach(r => {
+          const pid = r.product_id || '';
+          const spend = parseFloat(r.spend || 0);
+          if (!pid || spend <= 0) return;
+          if (!metaProductMap[pid]) metaProductMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
+          metaProductMap[pid].spend       += spend;
+          metaProductMap[pid].impressions += parseFloat(r.impressions || 0);
+          metaProductMap[pid].clicks      += parseFloat(r.clicks || 0);
+        });
+        metaRows = Object.values(metaProductMap)
+          .sort((a, b) => b.spend - a.spend)
+          .slice(0, 100);
+      } catch(e) {
+        console.warn('Direct fetch failed, using proxy:', e.message);
+        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100 }, dpaMetaFrom, dpaMetaTo);
       }
 
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
@@ -1955,6 +1968,8 @@ function showError(msg) {
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.5"/><path d="M16 9v8M16 21v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <p>${msg}</p>
     </div>`;
+}
+
 }
 
 init();
