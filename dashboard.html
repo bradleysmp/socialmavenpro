@@ -1259,13 +1259,13 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       </tr>`;
     };
 
-    const section = (title, color, headers, rows) => rows.length === 0 ? '' : `
+    const section = (title, color, headers, rowsHtml) => rowsHtml.length === 0 ? '' : `
       <div style="margin-bottom:4px;padding:8px 12px;background:var(--bg3);border-radius:4px 4px 0 0;border-bottom:1px solid var(--border);">
         <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:${color};">${title}</span>
       </div>
       <table style="margin-bottom:16px;">
         <thead><tr><th>Campaign</th>${headers}</tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${rowsHtml}</tbody>
       </table>`;
 
     return `<div class="table-card">
