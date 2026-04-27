@@ -870,8 +870,8 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
 }
 
 // Direct Windsor fetch — bypasses Netlify proxy for large requests
-async function fetchWindsorDirect(connector, accountId, fields, datePreset, dateFrom = null, dateTo = null) {
-  const cacheKey = `direct_${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}`;
+async function fetchWindsorDirect(connector, accountId, fields, datePreset, dateFrom = null, dateTo = null, minSpend = 0) {
+  const cacheKey = `direct_${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}_${minSpend}`;
   if (state.cache[cacheKey]) return state.cache[cacheKey];
 
   // Resolve date presets to explicit dates (required for some connectors)
@@ -891,10 +891,9 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   params.append('fields', fields.join(','));
   if (accountId) {
     params.append('account_id', accountId);
-    // Only filter by spend — accountid filter causes issues with some connectors
-    params.append('filter', JSON.stringify([['spend','gt',0]]));
+    params.append('filter', JSON.stringify([['spend','gt', minSpend]]));
   } else {
-    params.append('filter', JSON.stringify([['spend','gt',0]]));
+    params.append('filter', JSON.stringify([['spend','gt', minSpend]]));
   }
 
   if (dateFrom && dateTo) {
@@ -974,8 +973,16 @@ async function loadData() {
       // Falls back to proxy with server-side aggregation if CORS blocks direct call
       showLoading('Fetching Meta product data…');
       let metaRows;
+      // Minimum spend filter per period — keeps Windsor response manageable
+      // 7d: £0.50+, 30d: £2+, MTD/custom: £1+
+      const minSpendByPeriod = {
+        'last_7d': 0.50, 'last_30d': 2.0, 'last_3m': 5.0, 'last_year': 10.0,
+        'this_month': 1.0, 'last_1m': 2.0,
+      };
+      const minSpend = minSpendByPeriod[dpaMetaPeriod] || 1.0;
+
       try {
-        const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
+        const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo, minSpend);
         const metaProductMap = {};
         rawMetaRows.forEach(r => {
           const pid = r.product_id || '';
