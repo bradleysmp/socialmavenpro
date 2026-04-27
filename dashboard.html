@@ -889,8 +889,12 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   const params = new URLSearchParams();
   params.append('api_key', state.apiKey);
   params.append('fields', fields.join(','));
-  if (accountId) params.append('account_id', accountId);
-  params.append('filter', JSON.stringify([['spend', 'gt', 0]]));
+  if (accountId) {
+    params.append('account_id', accountId);
+    params.append('filter', JSON.stringify([['accountid','eq',accountId],'and',['spend','gt',0]]));
+  } else {
+    params.append('filter', JSON.stringify([['spend','gt',0]]));
+  }
 
   if (dateFrom && dateTo) {
     params.append('date_from', dateFrom);
@@ -942,10 +946,24 @@ async function loadData() {
       const metaProductFields = ['product_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      // Fetch sequentially to avoid gateway timeouts on large product catalogues
+      // Fetch Meta product data directly from Windsor (bypasses Netlify proxy size limits)
       showLoading('Fetching Meta product data…');
-      // Proxy fetches day-by-day and aggregates to top 100 server-side
-      const metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100 }, dpaMetaFrom, dpaMetaTo);
+      const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo);
+
+      // Aggregate by product_id client-side and take top 100 by spend
+      const metaProductMap = {};
+      rawMetaRows.forEach(r => {
+        const pid = r.product_id || '';
+        const spend = parseFloat(r.spend || 0);
+        if (!pid || spend <= 0) return;
+        if (!metaProductMap[pid]) metaProductMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
+        metaProductMap[pid].spend       += spend;
+        metaProductMap[pid].impressions += parseFloat(r.impressions || 0);
+        metaProductMap[pid].clicks      += parseFloat(r.clicks || 0);
+      });
+      const metaRows = Object.values(metaProductMap)
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, 100);
 
       showLoading('Fetching GA4 product data…');
       const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
