@@ -952,7 +952,7 @@ async function loadData() {
       const dpaMetaFrom = state.dateFrom;
       const dpaMetaTo = state.dateTo;
 
-      const metaProductFields = ['product_id','spend','impressions','clicks'];
+      const metaProductFields = ['product_id','account_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
       // Fetch GA4 and Merchant first (these go through proxy fine — small responses)
@@ -988,6 +988,9 @@ async function loadData() {
         const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo, minSpend);
         const metaProductMap = {};
         rawMetaRows.forEach(r => {
+          // Filter to only this client's account
+          const rowAccount = String(r.account_id || '');
+          if (rowAccount && rowAccount !== String(accountId)) return;
           const pid = r.product_id || '';
           const spend = parseFloat(r.spend || 0);
           if (!pid || spend <= 0) return;
