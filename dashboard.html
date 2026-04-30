@@ -1836,10 +1836,13 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   }).filter(p => !hasMerchant || p.inStock);
 
   // Determine which columns to show
-  const hasGA4Data = joined.some(p => p.ptv !== null);
+  const hasGA4Joined = joined.some(p => p.ptv !== null);
+  const hasGA4Connected = !!Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client);
+  const hasGA4Data = hasGA4Joined; // keep for backwards compat
   window._dpaProducts = joined;
   window._dpaHasMerchant = hasMerchant;
-  window._dpaHasGA4 = hasGA4Data;
+  window._dpaHasGA4 = hasGA4Joined;
+  window._dpaHasGA4Connected = hasGA4Connected;
 
   const scaleCount      = joined.filter(p=>p.rec==='Scale in DPA').length;
   const increaseCount   = joined.filter(p=>p.rec==='Increase budget').length;
@@ -1849,7 +1852,8 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
 
   const sorts = [
     ['score','Score'],['metaSpend','Meta Spend'],['metaCtr','Meta CTR'],['metaCpc','Meta CPC'],
-    ...(hasGA4Data?[['ga4Purchases','GA4 Purchases'],['ptv','PTV %']]:[]),
+    ...(hasGA4Connected?[['ga4Purchases','GA4 Purchases']]:[]),
+    ...(hasGA4Joined?[['ptv','PTV %']]:[]),
     ...(hasMerchant?[['qty','Stock Qty'],['price','Price']]:[]),
   ];
 
@@ -1896,10 +1900,10 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta Spend</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CTR</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;border-bottom:1px solid var(--border);">Meta CPC</th>
-          ${hasGA4Data?`
+          ${hasGA4Connected?`<th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">GA4 Purchases</th>`:''}
+          ${hasGA4Joined?`
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">PTV %</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">CTV %</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;border-bottom:1px solid var(--border);">GA4 Purchases</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">GA4 Revenue</th>
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);">Implied CPA</th>`:''}
           ${hasMerchant?`
@@ -1909,7 +1913,7 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);min-width:160px;">Recommendation</th>
         </tr></thead>
         <tbody id="dpa-tbody">
-          ${renderDPARows(joined, hasMerchant, hasGA4Data)}
+          ${renderDPARows(joined, hasMerchant, hasGA4Joined, hasGA4Connected)}
         </tbody>
       </table>
     </div>
@@ -1918,9 +1922,10 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   document.getElementById('content').innerHTML = html;
 }
 
-function renderDPARows(products, hasMerchant, hasGA4Data) {
-  const hm = hasMerchant !== undefined ? hasMerchant : window._dpaHasMerchant;
-  const hg = hasGA4Data  !== undefined ? hasGA4Data  : window._dpaHasGA4;
+function renderDPARows(products, hasMerchant, hasGA4Joined, hasGA4Connected) {
+  const hm = hasMerchant   !== undefined ? hasMerchant   : window._dpaHasMerchant;
+  const hg = hasGA4Joined  !== undefined ? hasGA4Joined  : window._dpaHasGA4;
+  const hc = hasGA4Connected !== undefined ? hasGA4Connected : window._dpaHasGA4Connected;
   return products.map(p => `
     <tr style="border-bottom:1px solid var(--border);transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:10px 12px;">
@@ -1933,15 +1938,15 @@ function renderDPARows(products, hasMerchant, hasGA4Data) {
         </div>
       </td>
       <td style="padding:10px 8px;text-align:center;">
-        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=65?'rgba(29,158,117,0.15)':p.score>=40?'rgba(201,123,10,0.15)':'rgba(90,88,86,0.12)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=65?'var(--green)':p.score>=40?'var(--amber)':'var(--text3)'};">${p.score}</div>
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:${p.score>=65?'rgba(29,158,117,0.15)':p.score>=45?'rgba(201,123,10,0.15)':'rgba(90,88,86,0.12)'};font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:${p.score>=65?'var(--green)':p.score>=45?'var(--amber)':'var(--text3)'};">${p.score}</div>
       </td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${fmt(p.metaSpend)}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.metaCtr>=3?'var(--green)':p.metaCtr>=1.5?'var(--amber)':'var(--red)'};">${p.metaCtr.toFixed(2)}%</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.metaCpc<=0.25?'var(--green)':p.metaCpc<=0.5?'var(--text2)':'var(--amber)'};">${fmt(p.metaCpc)}</td>
+      ${hc?`<td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ga4Purchases>=10?'var(--green)':p.ga4Purchases>=3?'var(--amber)':'var(--text3)'};">${p.ga4Purchases>0?Math.round(p.ga4Purchases):'-'}</td>`:''}
       ${hg?`
       <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ptv>=10?'var(--green)':p.ptv>=5?'var(--amber)':p.ga4Views>0?'var(--red)':'var(--text3)'};">${p.ga4Views>0?p.ptv.toFixed(1)+'%':'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.ctv>=20?'var(--green)':p.ctv>=10?'var(--amber)':'var(--text3)'};">${p.ga4Views>0?p.ctv.toFixed(1)+'%':'-'}</td>
-      <td style="padding:10px 8px;text-align:right;font-size:12px;font-weight:500;color:${p.ga4Purchases>=10?'var(--green)':p.ga4Purchases>=3?'var(--amber)':'var(--text3)'};">${p.ga4Purchases>0?Math.round(p.ga4Purchases):'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:var(--text2);">${p.ga4Revenue>0?fmt(p.ga4Revenue):'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-size:12px;color:${p.impliedCpa&&p.price>0&&p.impliedCpa>p.price?'var(--red)':p.impliedCpa?'var(--text2)':'var(--text3)'};">${p.impliedCpa?fmt(p.impliedCpa):'-'}</td>`:''}
       ${hm?`
@@ -1954,7 +1959,6 @@ function renderDPARows(products, hasMerchant, hasGA4Data) {
       </td>
     </tr>`).join('');
 }
-
 function sortDPA(field) {
   if (!window._dpaProducts) return;
   window._dpaProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
@@ -1967,7 +1971,7 @@ function filterDPA(query) {
   const q = query.toLowerCase();
   const filtered = q ? window._dpaProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.id||'').toLowerCase().includes(q)) : window._dpaProducts;
   const tbody = document.getElementById('dpa-tbody');
-  if (tbody) tbody.innerHTML = renderDPARows(filtered, hasMerchant);
+  if (tbody) tbody.innerHTML = renderDPARows(filtered, window._dpaHasMerchant, window._dpaHasGA4, window._dpaHasGA4Connected);
 }
 function showLoading(msg) {
   document.getElementById('content').innerHTML = `
