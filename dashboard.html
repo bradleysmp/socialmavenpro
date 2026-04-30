@@ -1699,9 +1699,22 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   const stockMap = {};
   (merchantStock||[]).forEach(r => { const id=r.product_id||''; stockMap[id]=(stockMap[id]||0)+parseInt(r.product_sell_on_google_quantity||0); });
 
-  // ── Build GA4 lookup by item_id (slug-based for Fragrance Samples)
+  // ── Build GA4 lookup — multiple join strategies:
+  // 1. Direct item_id (Fragrance Samples slug-based)
+  // 2. Last segment of Shopify variant ID e.g. shopify_GB_123_456789 → 456789 (CHO, Alchemy)
   const ga4Map = {};
-  (ga4Rows||[]).forEach(r => { const id=(r.item_id||'').toLowerCase().trim(); if(id) ga4Map[id]=r; });
+  const ga4MapVariant = {};
+  (ga4Rows||[]).forEach(r => {
+    const id = (r.item_id||'').trim();
+    if (!id) return;
+    ga4Map[id.toLowerCase()] = r;
+    // Also index by last numeric segment (Shopify variant ID)
+    const parts = id.split('_');
+    const lastSegment = parts[parts.length - 1];
+    if (lastSegment && /^\d+$/.test(lastSegment)) {
+      ga4MapVariant[lastSegment] = r;
+    }
+  });
 
   // ── Aggregate Meta by product ID
   const metaMap = {};
@@ -1733,8 +1746,10 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     const cat = catMap[m.id] || null;
     const qty = stockMap[m.id] || 0;
 
-    // GA4 join by slug (works for Fragrance Samples, won't match for CP/Decorum)
-    const ga4 = ga4Map[idLower] || ga4Map[baseSlug] || null;
+    // GA4 join — try multiple strategies:
+    // 1. Direct slug match (Fragrance Samples)
+    // 2. Shopify variant ID — last numeric segment of GA4 item_id (CHO, Alchemy London)
+    const ga4 = ga4Map[idLower] || ga4Map[baseSlug] || ga4MapVariant[m.id] || null;
 
     // Meta signals
     const metaCtr = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
