@@ -855,6 +855,9 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
   const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}_${JSON.stringify(options)}`;
   if (state.cache[cacheKey]) return state.cache[cacheKey];
 
+  // Extract proxy-level flags from options so they're sent at top level of request
+  const { top_n_by_spend, min_spend, strip_zero_spend, ...connectorOptions } = options || {};
+
   const res = await fetch('/.netlify/functions/windsor', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -866,7 +869,10 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
       date_to: dateTo,
       fields: fields.join(','),
       account_id: accountId,
-      options,
+      options: connectorOptions,
+      top_n_by_spend,
+      min_spend,
+      strip_zero_spend,
     })
   });
 
@@ -985,14 +991,25 @@ async function loadData() {
       // Falls back to proxy with server-side aggregation if CORS blocks direct call
       showLoading('Fetching Meta product data…');
       let metaRows;
-      // Minimum spend filter per period — keeps Windsor response manageable
-      // 7d: £0.50+, 30d: £2+, MTD/custom: £1+
+      // Minimum spend filter scales with period length to keep response manageable
+      // Larger date ranges naturally have more rows, so threshold rises proportionally
       const minSpendByPeriod = {
-        'last_7d': 0.50, 'last_30d': 2.0, 'last_3m': 5.0, 'last_year': 10.0,
-        'this_month': 1.0, 'last_1m': 2.0,
+        'last_7d':    1.0,
+        'last_30d':   5.0,
+        'last_3m':   15.0,
+        'last_year': 50.0,
+        'this_month': 3.0,
+        'last_1m':    5.0,
       };
-      const minSpend = minSpendByPeriod[dpaMetaPeriod] || 1.0;
+      // For custom date ranges, calculate threshold based on number of days
+      let minSpend = minSpendByPeriod[dpaMetaPeriod];
+      if (!minSpend && dpaMetaFrom && dpaMetaTo) {
+        const days = Math.max(1, Math.round((new Date(dpaMetaTo) - new Date(dpaMetaFrom))/86400000));
+        minSpend = Math.max(1, days * 0.2); // £0.20 per day in the period
+      }
+      if (!minSpend) minSpend = 2.0;
 
+      // Try direct fetch first — bypasses proxy size limits entirely
       try {
         const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo, minSpend);
         const metaProductMap = {};
@@ -1013,7 +1030,8 @@ async function loadData() {
           .slice(0, 100);
       } catch(e) {
         console.warn('Direct fetch failed, using proxy:', e.message);
-        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100 }, dpaMetaFrom, dpaMetaTo);
+        // Proxy fallback — pass min_spend so Windsor filters at source
+        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100, min_spend: minSpend }, dpaMetaFrom, dpaMetaTo);
       }
 
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
