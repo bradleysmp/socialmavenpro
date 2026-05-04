@@ -463,6 +463,7 @@ const CLIENTS = {
     { id: '1138713326327890', name: 'Neo Direct' },
     { id: '457775049411494',  name: 'Oven Support' },
     { id: '223014600213426',  name: 'Alchemy London' },
+    { id: '783788426913932',  name: 'Babble & Goose' },
   ],
   pinterest: {
     '549770135568': '1142622296536709',
@@ -485,7 +486,11 @@ const CLIENTS = {
   merchant: {
     '136231340': '877017732651263', // CP Lighting & Interiors
     '766699436': '468452590544702', // Decorum Living
-  }
+  },
+  // TikTok account → Meta account mapping
+  tiktok: {
+    '7231226751496503297': '783788426913932', // Babble & Goose
+  },
 };
 
 // ─── CLIENT SETTINGS ───────────────────────────────────────
@@ -505,6 +510,7 @@ const CLIENT_SETTINGS = {
   '1138713326327890': { name: 'Neo Direct',             margin: 0.45, targetRoas: 3.0,  breakEvenRoas: 2.22 },
   '457775049411494':  { name: 'Oven Support',           margin: null, targetCpl: 8.0,   targetCpp: 50.0     },
   '223014600213426':  { name: 'Alchemy London',         margin: 0.55, targetRoas: 5.0,  breakEvenRoas: 1.82 },
+  '783788426913932':  { name: 'Babble & Goose',         margin: 0.55, targetRoas: 4.0,  breakEvenRoas: 1.82 },
 };
 
 
@@ -672,7 +678,8 @@ function selectClient(id) {
   document.getElementById('btn-pdf').style.display = '';
 
   // Show relevant platform tabs
-  document.getElementById('tab-tiktok').style.display = 'none';
+  const hasTikTok = Object.values(CLIENTS.tiktok||{}).includes(id);
+  document.getElementById('tab-tiktok').style.display = hasTikTok ? '' : 'none';
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
 
@@ -1013,6 +1020,25 @@ async function loadData() {
       return;
     }
 
+    if (connector === 'tiktok') {
+      const tikTokId = Object.entries(CLIENTS.tiktok||{}).find(([k,v])=>v===state.client)?.[0];
+      if (!tikTokId) { showError('No TikTok account linked for this client.'); return; }
+      accountId = tikTokId;
+
+      const ttFields     = ['date','spend','impressions','clicks','reach','cpm','ctr','complete_payment','complete_payment_roas','cost_per_complete_payment'];
+      const ttCampFields = ['campaign','spend','impressions','clicks','reach','cpm','complete_payment','complete_payment_roas'];
+      const ttCreativeFields = ['ad_name','ad_id','spend','impressions','clicks','complete_payment','complete_payment_roas','image_url','video_cover_url'];
+
+      const [rows, campRows, creativeRows] = await Promise.all([
+        fetchWindsor('tiktok', tikTokId, ttFields, state.period, {}, state.dateFrom, state.dateTo),
+        fetchWindsor('tiktok', tikTokId, ttCampFields, state.period, {}, state.dateFrom, state.dateTo),
+        fetchWindsor('tiktok', tikTokId, ttCreativeFields, state.period, {}, state.dateFrom, state.dateTo),
+      ]);
+
+      renderDashboard(rows, campRows, creativeRows, connector);
+      return;
+    }
+
     if (connector === 'pinterest') {
       const pid = Object.entries(CLIENTS.pinterest).find(([k,v])=>v===state.client)?.[0];
       if (!pid) { showError('No Pinterest account linked for this client.'); return; }
@@ -1094,8 +1120,10 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const clickToLead = totalClicks > 0 ? (totalLeads / totalClicks * 100) : 0;
 
   // Ecom metrics
-  const totalRev = !isLeadGen ? (connector === 'facebook' ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase') : sum(active, 'total_checkout_value')) : 0;
-  const totalOrders = !isLeadGen ? (connector === 'facebook' ? sum(active, 'actions_purchase') : sum(active, 'total_checkout')) : 0;
+  // TikTok revenue = spend × complete_payment_roas (Windsor doesn't return raw revenue value)
+  const ttRevCalc = (rows) => rows.reduce((s, r) => s + parseFloat(r.spend||0) * parseFloat(r.complete_payment_roas||0), 0);
+  const totalRev = !isLeadGen ? (connector === 'facebook' ? sum(active, 'action_values_offsite_conversion_fb_pixel_purchase') : connector === 'tiktok' ? ttRevCalc(active) : sum(active, 'total_checkout_value')) : 0;
+  const totalOrders = !isLeadGen ? (connector === 'facebook' ? sum(active, 'actions_purchase') : connector === 'tiktok' ? sum(active, 'complete_payment') : sum(active, 'total_checkout')) : 0;
   const roas = !isLeadGen && totalSpend > 0 ? totalRev / totalSpend : 0;
   const cpa = !isLeadGen && totalOrders > 0 ? totalSpend / totalOrders : 0;
   const aov = !isLeadGen && totalOrders > 0 ? totalRev / totalOrders : 0;
@@ -1104,8 +1132,8 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const hasCompare = compareRows && compareRows.length > 0;
   const cmpActive = hasCompare ? compareRows.filter(r => parseFloat(r.spend||0) > 0) : [];
   const cmpSpend = hasCompare ? sum(cmpActive, 'spend') : 0;
-  const cmpRev = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'action_values_offsite_conversion_fb_pixel_purchase') : sum(cmpActive,'total_checkout_value')) : 0) : 0;
-  const cmpOrders = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'actions_purchase') : sum(cmpActive,'total_checkout')) : 0) : 0;
+  const cmpRev = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'action_values_offsite_conversion_fb_pixel_purchase') : connector==='tiktok' ? ttRevCalc(cmpActive) : sum(cmpActive,'total_checkout_value')) : 0) : 0;
+  const cmpOrders = hasCompare ? (!isLeadGen ? (connector==='facebook' ? sum(cmpActive,'actions_purchase') : connector==='tiktok' ? sum(cmpActive,'complete_payment') : sum(cmpActive,'total_checkout')) : 0) : 0;
   const cmpLeads = hasCompare && isLeadGen ? sum(cmpActive,'actions_offsite_conversion_fb_pixel_lead') : 0;
   const cmpRoas = cmpSpend > 0 && cmpRev > 0 ? cmpRev/cmpSpend : 0;
   const cmpCpl = cmpSpend > 0 && cmpLeads > 0 ? cmpSpend/cmpLeads : 0;
@@ -1129,8 +1157,10 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
     if (!byDate[d]) byDate[d] = { date:d, spend:0, impressions:0, clicks:0, reach:0,
       action_values_offsite_conversion_fb_pixel_purchase:0, actions_purchase:0,
       total_checkout_value:0, total_checkout:0,
+      complete_payment:0, complete_payment_roas_weighted:0,
       actions_offsite_conversion_fb_pixel_lead:0, actions_landing_page_view:0 };
-    byDate[d].spend += parseFloat(r.spend||0);
+    const daySpend = parseFloat(r.spend||0);
+    byDate[d].spend += daySpend;
     byDate[d].impressions += parseFloat(r.impressions||0);
     byDate[d].clicks += parseFloat(r.clicks||0);
     byDate[d].reach += parseFloat(r.reach||0);
@@ -1138,6 +1168,9 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
     byDate[d].actions_purchase += parseFloat(r.actions_purchase||0);
     byDate[d].total_checkout_value += parseFloat(r.total_checkout_value||0);
     byDate[d].total_checkout += parseFloat(r.total_checkout||0);
+    byDate[d].complete_payment += parseFloat(r.complete_payment||0);
+    // Store weighted revenue for TikTok (spend × roas per row, sum gives total revenue)
+    byDate[d].complete_payment_roas_weighted += daySpend * parseFloat(r.complete_payment_roas||0);
     byDate[d].actions_offsite_conversion_fb_pixel_lead += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
     byDate[d].actions_landing_page_view += parseFloat(r.actions_landing_page_view||0);
   });
@@ -1147,6 +1180,8 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const spendData = sorted.map(r => +r.spend.toFixed(2));
   const primaryData = isLeadGen
     ? sorted.map(r => parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0))
+    : connector === 'tiktok'
+    ? sorted.map(r => +parseFloat(r.complete_payment_roas_weighted||0).toFixed(2))
     : sorted.map(r => +parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0).toFixed(2));
   const secondaryData = isLeadGen
     ? sorted.map(r => parseFloat(r.actions_purchase||0))
@@ -1158,12 +1193,16 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       const l = parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
       return l > 0 ? +(s/l).toFixed(2) : null;
     }
+    if (connector === 'tiktok') {
+      const rv = parseFloat(r.complete_payment_roas_weighted||0);
+      return +(rv/s).toFixed(2);
+    }
     const rv = parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||r.total_checkout_value||0);
     return +(rv/s).toFixed(2);
   });
 
   const camps = aggregateCampaigns(campRows, connector, isLeadGen);
-  const creatives = aggregateCreatives(creativeRows, isLeadGen);
+  const creatives = aggregateCreatives(creativeRows, isLeadGen, connector);
 
   const settings = CLIENT_SETTINGS[state.client] || {};
   const breakEvenRoas = settings.breakEvenRoas || null;
@@ -1230,8 +1269,8 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       ${metricCard('CPC', fmt(totalClicks > 0 ? totalSpend/totalClicks : 0), 'cost per click', '', delta(totalClicks>0?totalSpend/totalClicks:0, cmpClicks>0?cmpSpend/cmpClicks:0, true))}
     </div>`;
 
-  const chartLabel = isLeadGen ? 'Spend vs Leads' : (connector === 'pinterest' ? 'Spend vs Checkouts' : 'Spend vs Revenue');
-  const secondaryLabel = isLeadGen ? 'Leads' : (connector === 'pinterest' ? 'Checkouts' : 'Revenue');
+  const chartLabel = isLeadGen ? 'Spend vs Leads' : (connector === 'pinterest' ? 'Spend vs Checkouts' : connector === 'tiktok' ? 'Spend vs Revenue' : 'Spend vs Revenue');
+  const secondaryLabel = isLeadGen ? 'Leads' : (connector === 'pinterest' ? 'Checkouts' : connector === 'tiktok' ? 'Revenue' : 'Revenue');
   const roasChartLabel = isLeadGen ? 'Daily CPL trend' : 'Daily ROAS';
   const campaignTableHTML = isLeadGen ? (() => {
     // Split campaigns into leads vs purchases
@@ -1566,8 +1605,10 @@ function aggregateCampaigns(rows, connector, isLeadGen = false) {
       map[name].leads += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
       map[name].orders += parseFloat(r.actions_purchase||0);
     } else {
-      map[name].rev += parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.total_checkout_value)||0);
-      map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:r.total_checkout)||0);
+      map[name].rev += connector==='tiktok'
+        ? parseFloat(r.spend||0) * parseFloat(r.complete_payment_roas||0)
+        : parseFloat((connector==='facebook'?r.action_values_offsite_conversion_fb_pixel_purchase:r.total_checkout_value)||0);
+      map[name].orders += parseFloat((connector==='facebook'?r.actions_purchase:connector==='tiktok'?r.complete_payment:r.total_checkout)||0);
     }
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
@@ -1578,7 +1619,7 @@ function imgProxy(url) {
   return `/.netlify/functions/imgproxy?url=${encodeURIComponent(url)}`;
 }
 
-function aggregateCreatives(rows, isLeadGen = false) {
+function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
   if (!rows || !rows.length) return [];
   const map = {};
   rows.forEach(r => {
@@ -1588,17 +1629,21 @@ function aggregateCreatives(rows, isLeadGen = false) {
       spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0,
       image_url: null, thumbnail_url: null
     };
-    map[id].spend += parseFloat(r.spend||0);
+    const rowSpend = parseFloat(r.spend||0);
+    map[id].spend += rowSpend;
     map[id].impressions += parseFloat(r.impressions||0);
     map[id].clicks += parseFloat(r.clicks||0);
     if (isLeadGen) {
       map[id].leads += parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
       map[id].orders += parseFloat(r.actions_purchase||0);
+    } else if (connector === 'tiktok') {
+      map[id].rev += rowSpend * parseFloat(r.complete_payment_roas||0);
+      map[id].orders += parseFloat(r.complete_payment||0);
     } else {
       map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
       map[id].orders += parseFloat(r.actions_purchase||0);
     }
-    if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
+    if (!map[id].image_url && (r.image_url||r.video_cover_url)) map[id].image_url = r.image_url||r.video_cover_url;
     if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
