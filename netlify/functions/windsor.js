@@ -55,6 +55,8 @@ exports.handler = async function(event) {
     const supportsFilter = filterableConnectors.some(c => connector.startsWith(c));
 
     // Build filter — combine account filter and min_spend if both apply
+    // Connector-specific field name for account filtering
+    const accountFilterField = connector === 'tiktok' ? 'account_id' : 'accountid';
     let filterArr = null;
     if (filters) {
       filterArr = filters;
@@ -62,12 +64,12 @@ exports.handler = async function(event) {
       // Product-level request — filter by min spend at Windsor level
       const minSp = parseFloat(min_spend) || 1.0;
       if (account_id) {
-        filterArr = [['accountid', 'eq', account_id], 'and', ['spend', 'gt', minSp]];
+        filterArr = [[accountFilterField, 'eq', account_id], 'and', ['spend', 'gt', minSp]];
       } else {
         filterArr = [['spend', 'gt', minSp]];
       }
     } else if (account_id && supportsFilter) {
-      filterArr = [['accountid', 'eq', account_id]];
+      filterArr = [[accountFilterField, 'eq', account_id]];
     }
 
     if (account_id) params.append('account_id', account_id);
