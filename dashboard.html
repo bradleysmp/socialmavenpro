@@ -1121,17 +1121,29 @@ async function loadData() {
       fetchWindsor(connector, accountId, creativeFields, state.period, {}, state.dateFrom, state.dateTo),
     ]);
 
-    // Optionally fetch creative images — wrapped in try/catch since URL generation
-    // for many ads on long date ranges can timeout. Performance data already loaded.
+    // Optionally fetch creative images — use direct browser fetch to bypass Netlify proxy timeout.
+    // Performance data already loaded, so failure here only affects thumbnails.
     try {
-      const imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      let imageRows;
+      if (connector === 'facebook') {
+        // Direct browser fetch — Netlify proxy can timeout when Windsor generates signed URLs
+        imageRows = await fetchWindsorDirect(connector, accountId, creativeImageFields, state.period, state.dateFrom, state.dateTo, 0);
+      } else {
+        imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      }
       const imgMap = {};
       (imageRows||[]).forEach(r => {
-        if (r.ad_id) imgMap[r.ad_id] = { image_url: r.image_url, thumbnail_url: r.thumbnail_url };
+        if (!r.ad_id) return;
+        if (!imgMap[r.ad_id]) imgMap[r.ad_id] = {};
+        if (r.image_url && !imgMap[r.ad_id].image_url) imgMap[r.ad_id].image_url = r.image_url;
+        if (r.thumbnail_url && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = r.thumbnail_url;
       });
       creativeRows.forEach(r => {
         const img = imgMap[r.ad_id];
-        if (img) { r.image_url = img.image_url; r.thumbnail_url = img.thumbnail_url; }
+        if (img) {
+          if (img.image_url) r.image_url = img.image_url;
+          if (img.thumbnail_url) r.thumbnail_url = img.thumbnail_url;
+        }
       });
     } catch(e) {
       console.warn('Creative image fetch failed — cards will render without thumbnails:', e.message);
