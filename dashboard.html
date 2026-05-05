@@ -1045,13 +1045,31 @@ async function loadData() {
 
       const ttFields     = ['date','spend','impressions','clicks','reach','cpm','ctr','complete_payment','complete_payment_roas','cost_per_complete_payment'];
       const ttCampFields = ['campaign','spend','impressions','clicks','reach','cpm','complete_payment','complete_payment_roas'];
-      const ttCreativeFields = ['ad_name','ad_id','spend','impressions','clicks','complete_payment','complete_payment_roas','image_url','video_cover_url'];
+      // TikTok rejects the entire request if any image URL has permission issues.
+      // Fetch performance fields first, then attempt to fetch images separately.
+      const ttCreativeFields = ['ad_name','ad_id','spend','impressions','clicks','complete_payment','complete_payment_roas'];
+      const ttCreativeImageFields = ['ad_id','image_url','video_cover_url'];
 
       const [rows, campRows, creativeRows] = await Promise.all([
         fetchWindsor('tiktok', tikTokId, ttFields, state.period, {}, state.dateFrom, state.dateTo),
         fetchWindsor('tiktok', tikTokId, ttCampFields, state.period, {}, state.dateFrom, state.dateTo),
         fetchWindsor('tiktok', tikTokId, ttCreativeFields, state.period, {}, state.dateFrom, state.dateTo),
       ]);
+
+      // Optionally fetch image URLs — wrapped in try/catch since TikTok may 500 on permission issues
+      try {
+        const imageRows = await fetchWindsor('tiktok', tikTokId, ttCreativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+        const imgMap = {};
+        (imageRows||[]).forEach(r => {
+          if (r.ad_id) imgMap[r.ad_id] = { image_url: r.image_url, video_cover_url: r.video_cover_url };
+        });
+        creativeRows.forEach(r => {
+          const img = imgMap[r.ad_id];
+          if (img) { r.image_url = img.image_url; r.video_cover_url = img.video_cover_url; }
+        });
+      } catch(e) {
+        console.warn('TikTok image fetch failed (some images may have permission issues):', e.message);
+      }
 
       renderDashboard(rows, campRows, creativeRows, connector);
       return;
@@ -1093,14 +1111,31 @@ async function loadData() {
       : ['campaign','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const creativeFields = isLeadGen
-      ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase','image_url','thumbnail_url']
-      : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase','image_url','thumbnail_url'];
+      ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase']
+      : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+    const creativeImageFields = ['ad_id','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo),
       fetchWindsor(connector, accountId, campFields, state.period, {}, state.dateFrom, state.dateTo),
       fetchWindsor(connector, accountId, creativeFields, state.period, {}, state.dateFrom, state.dateTo),
     ]);
+
+    // Optionally fetch creative images — wrapped in try/catch since URL generation
+    // for many ads on long date ranges can timeout. Performance data already loaded.
+    try {
+      const imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      const imgMap = {};
+      (imageRows||[]).forEach(r => {
+        if (r.ad_id) imgMap[r.ad_id] = { image_url: r.image_url, thumbnail_url: r.thumbnail_url };
+      });
+      creativeRows.forEach(r => {
+        const img = imgMap[r.ad_id];
+        if (img) { r.image_url = img.image_url; r.thumbnail_url = img.thumbnail_url; }
+      });
+    } catch(e) {
+      console.warn('Creative image fetch failed — cards will render without thumbnails:', e.message);
+    }
 
     // Fetch comparison period if enabled
     let compareRows = [];
