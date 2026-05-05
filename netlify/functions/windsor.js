@@ -83,7 +83,7 @@ exports.handler = async function(event) {
 
     // Fetch with hard timeout — Windsor sometimes hangs and we'd hit Netlify's 10s limit
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8500); // 8.5s — leaves buffer
+    const timeoutId = setTimeout(() => controller.abort(), 9500); // 9.5s — leaves small buffer under Netlify's 10s
 
     let response;
     try {
