@@ -283,6 +283,7 @@
   .creative-name { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .creative-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; }
   .creative-stat-label { color: var(--text3); }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -1487,85 +1488,163 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
 
     ${isBabbleGoose && !isLeadGen && connector === 'facebook' ? (() => {
       // ── B&G AUDIT TRACKING SECTION ────────────────────────
-      // Surfaces audit findings live in the dashboard so progress is tracked over time
+      // Surfaces audit findings live in the dashboard with auto-detect + manual dismiss
+      // Completed items persist in localStorage with timestamps for audit history
+
+      // Read completed actions from localStorage
+      const COMPLETED_KEY = 'smp_bg_audit_completed';
+      let completed = {};
+      try { completed = JSON.parse(localStorage.getItem(COMPLETED_KEY) || '{}'); } catch(e) {}
 
       // Identify prospecting campaigns where past-purchaser exclusions are likely missing
-      // Heuristic: campaign name contains prospecting/interest/lookalike/broad keywords
       const prospectingKeywords = ['prospect','interest','lookalike','lal','scaler','broad','cold','top of funnel','tofu','sales catalogue','sales interest'];
       const prospectingCamps = camps.filter(c => {
         const n = (c.name||'').toLowerCase();
         return prospectingKeywords.some(kw => n.includes(kw));
       });
-
-      // Count actively-spending prospecting campaigns running in parallel
       const activeProspecting = prospectingCamps.filter(c => c.spend >= 50);
-
-      // Detect concurrent prospecting campaigns (audit issue 2: auction overlap)
       const overlapRisk = activeProspecting.length >= 3;
-
-      // Calculate total spend on prospecting that may lack exclusions
       const prospectingSpend = prospectingCamps.reduce((s,c)=>s+c.spend, 0);
       const prospectingPct = totalSpend > 0 ? (prospectingSpend/totalSpend*100) : 0;
-
-      // Estimated wasted spend if 10-20% of prospecting conversions are existing customers
-      // (audit's estimate: £10k-£25k annually on £150k Meta spend)
       const prospectingPurchases = prospectingCamps.reduce((s,c)=>s+c.orders, 0);
       const estWastedLow  = (prospectingSpend * 0.10);
       const estWastedHigh = (prospectingSpend * 0.20);
 
+      // Auto-detection: check if pixel events are now reporting
+      // (Will need to update this — currently relies on actions_offsite_conversion_fb_pixel_custom in rows)
+      const customEventsTotal = rows.reduce((s,r) => s + parseFloat(r.actions_offsite_conversion_fb_pixel_custom || 0), 0);
+      const pixelEventsReporting = customEventsTotal > 0;
+
+      // Build action definitions with auto-detection logic
+      const actions = [
+        {
+          id: 'exclusions',
+          actionNum: '01',
+          severity: 'red',
+          icon: '!',
+          title: 'Past-purchaser exclusions not yet implemented',
+          detail: `${prospectingCamps.length} prospecting campaigns active · ${fmt(prospectingSpend)} spend (${prospectingPct.toFixed(0)}% of total) · ${Math.round(prospectingPurchases)} attributed purchases${prospectingSpend>500 ? ` · est. ${fmt(estWastedLow)}–${fmt(estWastedHigh)} of this period's spend may be hitting existing customers` : ''}`,
+          subtext: 'Action 01 · High impact · Build 365-day all-purchasers Custom Audience from Shopify and apply to all prospecting',
+          autoDetected: false,  // Cannot auto-detect from Windsor data
+          autoComplete: false,
+        },
+        {
+          id: 'auction_overlap',
+          actionNum: '02',
+          severity: 'amber',
+          icon: '!',
+          title: `Auction overlap risk: ${activeProspecting.length} prospecting campaigns running in parallel`,
+          detail: activeProspecting.slice(0,5).map(c => `<span style="display:inline-block;background:var(--bg3);padding:2px 8px;border-radius:3px;margin:2px 4px 2px 0;font-size:11px;">${truncate(c.name,28)} · ${fmt(c.spend)}</span>`).join(''),
+          subtext: 'Action 02 · CPMs typically inflated 15–30% when prospecting ad sets compete in the same auction. Consolidate to single Advantage+ Shopping campaign per region',
+          autoDetected: true,
+          autoComplete: !overlapRisk,  // Auto-disappears when <3 active prospecting campaigns
+        },
+        {
+          id: 'pixel_reporting',
+          actionNum: '03',
+          severity: 'amber',
+          icon: '~',
+          title: 'New vs existing customer split not yet reportable',
+          detail: 'PurchaseNewCustomer / PurchaseExistingCustomer pixel events return 0 via Windsor. Configured but not reporting reliably (audit confirmed)',
+          subtext: 'Action 03 · Fix to unlock new-customer Advantage+ optimisation',
+          autoDetected: true,
+          autoComplete: pixelEventsReporting,  // Auto-disappears when custom events > 0
+        },
+        {
+          id: 'us_setup',
+          actionNum: '04',
+          severity: 'amber',
+          icon: '~',
+          title: 'US setup fragmented across multiple campaigns',
+          detail: `US AOV £107 vs UK £89 — scale story available · audit identified ~14 fragmented US campaigns at 2.2x ROAS`,
+          subtext: 'Action 04 · Consolidate to single US Advantage+ Shopping campaign with localised creative',
+          autoDetected: false,
+          autoComplete: false,
+        },
+        {
+          id: 'q4_seasonality',
+          actionNum: '05',
+          severity: 'info',
+          icon: 'i',
+          title: 'Q4 dependency & creative refresh cadence',
+          detail: 'Q4 2025 ROAS: 5.25x → Spring 2026 ROAS: 2.73x (-48%). Largely creative fatigue not pure seasonality',
+          subtext: 'Action 05 · Fortnightly creative testing system with separated test budget envelope',
+          autoDetected: false,
+          autoComplete: false,
+        },
+        {
+          id: 'repeat_rate',
+          actionNum: '06',
+          severity: 'info',
+          icon: 'i',
+          title: 'Repeat rate is the underlying constraint',
+          detail: '~23% mature-cohort repeat rate · 12-month LTV £115 vs AOV £91 · limits how aggressively Meta can profitably scale prospecting',
+          subtext: 'Action 06 · Cross-functional · Retention / CRM / post-purchase journey is the parallel workstream',
+          autoDetected: false,
+          autoComplete: false,
+        },
+      ];
+
+      // Separate open vs completed actions
+      const openActions = actions.filter(a => !completed[a.id] && !a.autoComplete);
+      const autoCompleted = actions.filter(a => a.autoComplete && !completed[a.id]);
+      const manuallyCompleted = actions.filter(a => completed[a.id]);
+      const allCompleted = [...autoCompleted, ...manuallyCompleted];
+
+      const renderActionCard = (a, mode) => {
+        const colors = {
+          red:   { bg: 'rgba(226,75,74,0.12)',  fg: 'var(--red)' },
+          amber: { bg: 'rgba(201,123,10,0.12)', fg: 'var(--amber)' },
+          info:  { bg: 'rgba(90,88,86,0.15)',   fg: 'var(--text2)' },
+          green: { bg: 'rgba(29,158,117,0.12)', fg: 'var(--green)' },
+        };
+        const c = mode === 'completed' ? colors.green : colors[a.severity];
+        const completedMeta = completed[a.id];
+        return `
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);${mode==='completed'?'opacity:0.7;':''}" data-action-id="${a.id}">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:${c.bg};color:${c.fg};display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">${mode==='completed'?'✓':a.icon}</div>
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div style="color:var(--text);font-weight:500;margin-bottom:2px;">${a.title}</div>
+              ${mode === 'open' ? `<button onclick="smpDismissAuditAction('${a.id}')" style="background:transparent;border:1px solid var(--border);color:var(--text3);padding:3px 9px;border-radius:3px;font-size:10px;font-family:inherit;cursor:pointer;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Mark complete</button>` : ''}
+              ${mode === 'completed' && completedMeta ? `<button onclick="smpRestoreAuditAction('${a.id}')" style="background:transparent;border:none;color:var(--text3);padding:2px 4px;font-size:10px;font-family:inherit;cursor:pointer;" title="Restore to open">↺</button>` : ''}
+            </div>
+            <div style="${mode==='completed'?'color:var(--text3);':''}">${a.detail}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">
+              ${a.subtext}
+              ${mode === 'completed' && completedMeta ? ` · <span style="color:var(--green);">Completed ${completedMeta.date}</span>` : ''}
+              ${mode === 'completed' && !completedMeta ? ` · <span style="color:var(--green);">Auto-detected as resolved from live data</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+      };
+
       return `
     <div class="table-card" style="margin-top:16px;">
-      <div class="table-header">
+      <div class="table-header" style="display:flex;justify-content:space-between;align-items:center;">
         <div class="table-title">
           <span style="color:var(--orange);">●</span> Audit Action Tracker
-          <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px;">May 2026 audit · live progress</span>
+          <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px;">May 2026 audit · ${openActions.length} open · ${allCompleted.length} complete</span>
         </div>
       </div>
 
       <div style="padding:14px;font-size:12px;color:var(--text2);line-height:1.6;">
-
-        <!-- Issue 1: Past-purchaser exclusions -->
-        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(226,75,74,0.12);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">!</div>
-          <div style="flex:1;">
-            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Past-purchaser exclusions not yet implemented</div>
-            <div>${prospectingCamps.length} prospecting campaigns active · ${fmt(prospectingSpend)} spend (${prospectingPct.toFixed(0)}% of total) · ${Math.round(prospectingPurchases)} attributed purchases${prospectingSpend>500 ? ` · est. ${fmt(estWastedLow)}–${fmt(estWastedHigh)} of this period's spend may be hitting existing customers` : ''}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 01 · High impact · Build 365-day all-purchasers Custom Audience from Shopify and apply to all prospecting</div>
-          </div>
-        </div>
-
-        ${overlapRisk ? `
-        <!-- Issue 2: Auction overlap -->
-        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(201,123,10,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">!</div>
-          <div style="flex:1;">
-            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Auction overlap risk: ${activeProspecting.length} prospecting campaigns running in parallel</div>
-            <div>${activeProspecting.slice(0,5).map(c => `<span style="display:inline-block;background:var(--bg3);padding:2px 8px;border-radius:3px;margin:2px 4px 2px 0;font-size:11px;">${truncate(c.name,28)} · ${fmt(c.spend)}</span>`).join('')}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:4px;">Action 02 · CPMs typically inflated 15–30% when prospecting ad sets compete in the same auction. Consolidate to single Advantage+ Shopping campaign per region</div>
-          </div>
-        </div>` : ''}
-
-        <!-- Pixel reporting status -->
-        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(201,123,10,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">~</div>
-          <div style="flex:1;">
-            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">New vs existing customer split not yet reportable</div>
-            <div>PurchaseNewCustomer / PurchaseExistingCustomer pixel events return 0 via Windsor. Configured but not reporting reliably (audit confirmed)</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 03 · Fix to unlock new-customer Advantage+ optimisation</div>
-          </div>
-        </div>
-
-        <!-- Q4 seasonality dependency -->
-        <div style="display:flex;gap:10px;padding:10px 0;">
-          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(90,88,86,0.15);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">i</div>
-          <div style="flex:1;">
-            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Q4 dependency &amp; creative refresh cadence</div>
-            <div>Q4 2025 ROAS: 5.25x → Spring 2026 ROAS: 2.73x (-48%). Largely creative fatigue not pure seasonality</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 05 · Fortnightly creative testing system with separated test budget envelope</div>
-          </div>
-        </div>
-
+        ${openActions.length === 0 ? `
+          <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">
+            All audit actions complete or auto-resolved. <span style="color:var(--green);">Nice work.</span>
+          </div>` : openActions.map(a => renderActionCard(a, 'open')).join('')}
       </div>
+
+      ${allCompleted.length > 0 ? `
+      <div style="border-top:1px solid var(--border);">
+        <div onclick="document.getElementById('audit-completed-list').classList.toggle('hidden');this.querySelector('.chev').style.transform=document.getElementById('audit-completed-list').classList.contains('hidden')?'rotate(0deg)':'rotate(90deg)';" style="padding:10px 14px;cursor:pointer;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;transition:background 0.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <span class="chev" style="display:inline-block;transition:transform 0.15s;">▸</span>
+          Completed (${allCompleted.length})
+        </div>
+        <div id="audit-completed-list" class="hidden" style="padding:0 14px 14px;font-size:12px;color:var(--text2);line-height:1.6;">
+          ${allCompleted.map(a => renderActionCard(a, 'completed')).join('')}
+        </div>
+      </div>` : ''}
     </div>`;
     })() : ''}
 
@@ -2183,6 +2262,25 @@ function renderDPARows(products, hasMerchant, hasGA4Joined, hasGA4Connected) {
       </td>
     </tr>`).join('');
 }
+// ─── B&G AUDIT ACTION TRACKING ────────────────────────────
+function smpDismissAuditAction(actionId) {
+  const COMPLETED_KEY = 'smp_bg_audit_completed';
+  let completed = {};
+  try { completed = JSON.parse(localStorage.getItem(COMPLETED_KEY) || '{}'); } catch(e) {}
+  completed[actionId] = { date: new Date().toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) };
+  localStorage.setItem(COMPLETED_KEY, JSON.stringify(completed));
+  if (typeof loadData === 'function' && state.client) loadData();
+}
+
+function smpRestoreAuditAction(actionId) {
+  const COMPLETED_KEY = 'smp_bg_audit_completed';
+  let completed = {};
+  try { completed = JSON.parse(localStorage.getItem(COMPLETED_KEY) || '{}'); } catch(e) {}
+  delete completed[actionId];
+  localStorage.setItem(COMPLETED_KEY, JSON.stringify(completed));
+  if (typeof loadData === 'function' && state.client) loadData();
+}
+
 function sortDPA(field) {
   if (!window._dpaProducts) return;
   window._dpaProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
