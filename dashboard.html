@@ -1121,17 +1121,28 @@ async function loadData() {
       fetchWindsor(connector, accountId, creativeFields, state.period, {}, state.dateFrom, state.dateTo),
     ]);
 
-    // Optionally fetch creative images — wrapped in try/catch since URL generation
-    // for many ads on long date ranges can timeout. Performance data already loaded.
+    // Optionally fetch creative images — use direct browser fetch to bypass Netlify proxy timeout.
+    // Windsor takes time to generate signed thumbnail URLs; the direct fetch has no timeout limit.
     try {
-      const imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      let imageRows;
+      if (connector === 'facebook') {
+        imageRows = await fetchWindsorDirect(connector, accountId, creativeImageFields, state.period, state.dateFrom, state.dateTo, 0);
+      } else {
+        imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      }
       const imgMap = {};
       (imageRows||[]).forEach(r => {
-        if (r.ad_id) imgMap[r.ad_id] = { image_url: r.image_url, thumbnail_url: r.thumbnail_url };
+        if (!r.ad_id) return;
+        if (!imgMap[r.ad_id]) imgMap[r.ad_id] = {};
+        if (r.image_url && !imgMap[r.ad_id].image_url) imgMap[r.ad_id].image_url = r.image_url;
+        if (r.thumbnail_url && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = r.thumbnail_url;
       });
       creativeRows.forEach(r => {
         const img = imgMap[r.ad_id];
-        if (img) { r.image_url = img.image_url; r.thumbnail_url = img.thumbnail_url; }
+        if (img) {
+          if (img.image_url) r.image_url = img.image_url;
+          if (img.thumbnail_url) r.thumbnail_url = img.thumbnail_url;
+        }
       });
     } catch(e) {
       console.warn('Creative image fetch failed — cards will render without thumbnails:', e.message);
@@ -1295,8 +1306,23 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       </div>`
     : '';
 
+  // ── B&G AUDIT CONTEXT BANNER ─────────────────────────────
+  // Shows reference points agreed in the May 2026 audit so reporting is anchored to those benchmarks
+  const isBabbleGoose = state.client === '783788426913932';
+  const auditBanner = isBabbleGoose && !isLeadGen ? `
+    <div style="background:linear-gradient(90deg,rgba(255,107,53,0.08),rgba(255,107,53,0.02));border:1px solid rgba(255,107,53,0.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.5;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="color:var(--orange);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;font-size:10px;">May 2026 audit benchmarks</span>
+      </div>
+      <strong style="color:var(--text);">Break-even ROAS: 1.87x</strong> · contribution margin £48.70/order &nbsp;·&nbsp;
+      <strong style="color:var(--text);">Healthy target: 2.5x</strong> &nbsp;·&nbsp;
+      <strong style="color:var(--text);">12mo AOV ref: £91</strong> &nbsp;·&nbsp;
+      Note: Meta over-reports AOV ~15% — anchor decisions to MER, not platform ROAS
+    </div>` : '';
+
   const metricsHTML = isLeadGen ? `
     ${freqAlert}
+    ${auditBanner}
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
       ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)', delta(totalLeads, cmpLeads, false))}
@@ -1310,6 +1336,7 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
       ${metricCard('Reach', (totalReach/1000).toFixed(1)+'k', 'unique people', '', '')}
     </div>` : `
     ${freqAlert}
+    ${auditBanner}
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
       ${metricCard('Attributed Revenue', fmt(totalRev), `${Math.round(totalOrders)} purchases`, '', delta(totalRev, cmpRev, false))}
@@ -1457,6 +1484,90 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
     </div>
 
     ${campaignTableHTML}
+
+    ${isBabbleGoose && !isLeadGen && connector === 'facebook' ? (() => {
+      // ── B&G AUDIT TRACKING SECTION ────────────────────────
+      // Surfaces audit findings live in the dashboard so progress is tracked over time
+
+      // Identify prospecting campaigns where past-purchaser exclusions are likely missing
+      // Heuristic: campaign name contains prospecting/interest/lookalike/broad keywords
+      const prospectingKeywords = ['prospect','interest','lookalike','lal','scaler','broad','cold','top of funnel','tofu','sales catalogue','sales interest'];
+      const prospectingCamps = camps.filter(c => {
+        const n = (c.name||'').toLowerCase();
+        return prospectingKeywords.some(kw => n.includes(kw));
+      });
+
+      // Count actively-spending prospecting campaigns running in parallel
+      const activeProspecting = prospectingCamps.filter(c => c.spend >= 50);
+
+      // Detect concurrent prospecting campaigns (audit issue 2: auction overlap)
+      const overlapRisk = activeProspecting.length >= 3;
+
+      // Calculate total spend on prospecting that may lack exclusions
+      const prospectingSpend = prospectingCamps.reduce((s,c)=>s+c.spend, 0);
+      const prospectingPct = totalSpend > 0 ? (prospectingSpend/totalSpend*100) : 0;
+
+      // Estimated wasted spend if 10-20% of prospecting conversions are existing customers
+      // (audit's estimate: £10k-£25k annually on £150k Meta spend)
+      const prospectingPurchases = prospectingCamps.reduce((s,c)=>s+c.orders, 0);
+      const estWastedLow  = (prospectingSpend * 0.10);
+      const estWastedHigh = (prospectingSpend * 0.20);
+
+      return `
+    <div class="table-card" style="margin-top:16px;">
+      <div class="table-header">
+        <div class="table-title">
+          <span style="color:var(--orange);">●</span> Audit Action Tracker
+          <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px;">May 2026 audit · live progress</span>
+        </div>
+      </div>
+
+      <div style="padding:14px;font-size:12px;color:var(--text2);line-height:1.6;">
+
+        <!-- Issue 1: Past-purchaser exclusions -->
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(226,75,74,0.12);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">!</div>
+          <div style="flex:1;">
+            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Past-purchaser exclusions not yet implemented</div>
+            <div>${prospectingCamps.length} prospecting campaigns active · ${fmt(prospectingSpend)} spend (${prospectingPct.toFixed(0)}% of total) · ${Math.round(prospectingPurchases)} attributed purchases${prospectingSpend>500 ? ` · est. ${fmt(estWastedLow)}–${fmt(estWastedHigh)} of this period's spend may be hitting existing customers` : ''}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 01 · High impact · Build 365-day all-purchasers Custom Audience from Shopify and apply to all prospecting</div>
+          </div>
+        </div>
+
+        ${overlapRisk ? `
+        <!-- Issue 2: Auction overlap -->
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(201,123,10,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">!</div>
+          <div style="flex:1;">
+            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Auction overlap risk: ${activeProspecting.length} prospecting campaigns running in parallel</div>
+            <div>${activeProspecting.slice(0,5).map(c => `<span style="display:inline-block;background:var(--bg3);padding:2px 8px;border-radius:3px;margin:2px 4px 2px 0;font-size:11px;">${truncate(c.name,28)} · ${fmt(c.spend)}</span>`).join('')}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;">Action 02 · CPMs typically inflated 15–30% when prospecting ad sets compete in the same auction. Consolidate to single Advantage+ Shopping campaign per region</div>
+          </div>
+        </div>` : ''}
+
+        <!-- Pixel reporting status -->
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(201,123,10,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">~</div>
+          <div style="flex:1;">
+            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">New vs existing customer split not yet reportable</div>
+            <div>PurchaseNewCustomer / PurchaseExistingCustomer pixel events return 0 via Windsor. Configured but not reporting reliably (audit confirmed)</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 03 · Fix to unlock new-customer Advantage+ optimisation</div>
+          </div>
+        </div>
+
+        <!-- Q4 seasonality dependency -->
+        <div style="display:flex;gap:10px;padding:10px 0;">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(90,88,86,0.15);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;">i</div>
+          <div style="flex:1;">
+            <div style="color:var(--text);font-weight:500;margin-bottom:2px;">Q4 dependency &amp; creative refresh cadence</div>
+            <div>Q4 2025 ROAS: 5.25x → Spring 2026 ROAS: 2.73x (-48%). Largely creative fatigue not pure seasonality</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Action 05 · Fortnightly creative testing system with separated test budget envelope</div>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+    })() : ''}
 
     ${organicRows.length > 0 ? (() => {
       const orgActive = organicRows.filter(r => parseFloat(r.pin_impression||0) > 0);
