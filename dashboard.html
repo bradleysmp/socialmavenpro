@@ -973,42 +973,54 @@ async function loadData() {
 
       // Fetch GA4 and Merchant first (these go through proxy fine — small responses)
       showLoading('Fetching GA4 product data…');
-      const ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+      let ga4Rows = [];
+      try {
+        ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+      } catch(e) {
+        console.warn('GA4 fetch failed, continuing without GA4 data:', e.message);
+      }
 
       let merchantCat = [], merchantStock = [];
       if (hasMerchant) {
         showLoading('Fetching stock data…');
-        [merchantCat, merchantStock] = await Promise.all([
-          fetchWindsor('google_merchant', merchantId,
-            ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
-            state.period, {}, state.dateFrom, state.dateTo),
-          fetchWindsor('google_merchant', merchantId,
-            ['product_id','product_sell_on_google_quantity'],
-            state.period, {}, state.dateFrom, state.dateTo),
-        ]);
+        try {
+          [merchantCat, merchantStock] = await Promise.all([
+            fetchWindsor('google_merchant', merchantId,
+              ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
+              state.period, {}, state.dateFrom, state.dateTo),
+            fetchWindsor('google_merchant', merchantId,
+              ['product_id','product_sell_on_google_quantity'],
+              state.period, {}, state.dateFrom, state.dateTo),
+          ]);
+        } catch(e) {
+          // Merchant fetch failed (account not connected, permissions etc) — continue without stock data
+          console.warn('Merchant fetch failed, continuing without stock data:', e.message);
+          merchantCat = [];
+          merchantStock = [];
+        }
       }
 
       // Fetch Meta product data — try direct browser call first (no proxy size limits)
       // Falls back to proxy with server-side aggregation if CORS blocks direct call
       showLoading('Fetching Meta product data…');
       let metaRows;
-      // Minimum spend filter scales with period length to keep response manageable
-      // Larger date ranges naturally have more rows, so threshold rises proportionally
+      // Minimum spend filter — kept low enough to surface top 30+ products for all clients
+      // while still keeping response size manageable for larger catalogues (CP Lighting)
       const minSpendByPeriod = {
-        'last_7d':    1.0,
-        'last_30d':   5.0,
-        'last_3m':   15.0,
-        'last_year': 50.0,
-        'this_month': 3.0,
-        'last_1m':    5.0,
+        'last_7d':    0.50,
+        'last_30d':   1.50,
+        'last_3m':    5.00,
+        'last_year': 15.00,
+        'this_month': 1.00,
+        'last_1m':    1.50,
       };
       // For custom date ranges, calculate threshold based on number of days
       let minSpend = minSpendByPeriod[dpaMetaPeriod];
       if (!minSpend && dpaMetaFrom && dpaMetaTo) {
         const days = Math.max(1, Math.round((new Date(dpaMetaTo) - new Date(dpaMetaFrom))/86400000));
-        minSpend = Math.max(1, days * 0.2); // £0.20 per day in the period
+        minSpend = Math.max(0.5, days * 0.08); // £0.08 per day in the period
       }
-      if (!minSpend) minSpend = 2.0;
+      if (!minSpend) minSpend = 1.0;
 
       // Try direct fetch first — bypasses proxy size limits entirely
       try {
@@ -1028,11 +1040,11 @@ async function loadData() {
         });
         metaRows = Object.values(metaProductMap)
           .sort((a, b) => b.spend - a.spend)
-          .slice(0, 100);
+          .slice(0, 30);
       } catch(e) {
         console.warn('Direct fetch failed, using proxy:', e.message);
         // Proxy fallback — pass min_spend so Windsor filters at source
-        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 100, min_spend: minSpend }, dpaMetaFrom, dpaMetaTo);
+        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 30, min_spend: minSpend }, dpaMetaFrom, dpaMetaTo);
       }
 
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
@@ -2020,11 +2032,11 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     metaMap[id].clicks      += parseFloat(r.clicks||0);
   });
 
-  // ── Join and build product list — top 100 by spend, hide out-of-stock
+  // ── Join and build product list — top 30 by spend, hide out-of-stock
   const allProducts = Object.values(metaMap)
     .filter(m => m.spend > 0)
     .sort((a,b) => b.spend - a.spend)
-    .slice(0, 100);
+    .slice(0, 30);
 
   const joined = allProducts.map(m => {
     const idLower = m.id.toLowerCase();
@@ -2182,7 +2194,7 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
       </div>
 
       <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Products shown', joined.length.toString(), 'top 100 · in stock only', '')}
+        ${metricCard('Products shown', joined.length.toString(), 'top 30 · in stock only', '')}
         ${metricCard('Scale in DPA', scaleCount.toString(), 'score ≥65 · strong signals', scaleCount>0?'var(--green)':'var(--text3)')}
         ${metricCard('Increase budget', increaseCount.toString(), 'score 45–64 · good signals', increaseCount>0?'var(--amber)':'var(--text3)')}
         ${metricCard('Untapped', untappedCount.toString(), 'low allocation · worth testing', untappedCount>0?'var(--text2)':'var(--text3)')}
