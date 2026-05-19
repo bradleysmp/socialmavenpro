@@ -263,7 +263,23 @@
     .metric-card, .chart-card, .insights-card, .table-card, .table-card { break-inside: avoid; }
     .charts-row { grid-template-columns: 1fr 1fr !important; }
     canvas { max-width: 100% !important; }
-    @page { margin: 14mm; size: A4; }
+    @page { margin: 10mm; size: A4 landscape; }
+
+    /* Wide tables (product scorecard) — scale to fit page width so no columns clip */
+    .table-card { width: 100% !important; overflow: visible !important; }
+    .table-card > div { overflow: visible !important; }
+    .table-card table { width: 100% !important; table-layout: fixed !important; font-size: 9px !important; }
+    .table-card table th, .table-card table td {
+      padding: 5px 4px !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+    /* Product name / recommendation columns can wrap; numeric columns stay tight */
+    .table-card table th:first-child, .table-card table td:first-child { width: 18% !important; }
+    .table-card table th:last-child, .table-card table td:last-child { width: 20% !important; }
+    .table-card img { width: 22px !important; height: 22px !important; }
   }
 
   .print-header { display: none; padding: 16px 24px 0; }
