@@ -925,8 +925,9 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   params.append('fields', fields.join(','));
   if (accountId) {
     params.append('account_id', accountId);
-    params.append('filter', JSON.stringify([['spend','gt', minSpend]]));
-  } else {
+  }
+  // minSpend of -1 signals "no spend filter" — used for GA4 which has no spend field
+  if (minSpend >= 0) {
     params.append('filter', JSON.stringify([['spend','gt', minSpend]]));
   }
 
@@ -987,13 +988,19 @@ async function loadData() {
       const metaProductFields = ['product_id','account_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      // Fetch GA4 and Merchant first (these go through proxy fine — small responses)
+      // Fetch GA4 product data directly from Windsor — bypasses Netlify proxy.
+      // GA4 product responses can be 700+ rows which times out through the proxy.
       showLoading('Fetching GA4 product data…');
       let ga4Rows = [];
       try {
-        ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+        ga4Rows = await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
       } catch(e) {
-        console.warn('GA4 fetch failed, continuing without GA4 data:', e.message);
+        console.warn('GA4 direct fetch failed, trying proxy:', e.message);
+        try {
+          ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+        } catch(e2) {
+          console.warn('GA4 proxy fetch also failed, continuing without GA4 data:', e2.message);
+        }
       }
 
       let merchantCat = [], merchantStock = [];
