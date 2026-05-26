@@ -279,7 +279,12 @@
     /* Product name / recommendation columns can wrap; numeric columns stay tight */
     .table-card table th:first-child, .table-card table td:first-child { width: 18% !important; }
     .table-card table th:last-child, .table-card table td:last-child { width: 20% !important; }
-    .table-card img { width: 22px !important; height: 22px !important; }
+    /* Product scorecard table only — small inline thumbnails alongside text rows */
+    .table-card table td img { width: 22px !important; height: 22px !important; }
+    /* Creative cards — keep thumbnails at full card width on PDF export */
+    .creative-card { break-inside: avoid; page-break-inside: avoid; }
+    .creative-thumb { width: 100% !important; aspect-ratio: 1 !important; }
+    .creative-thumb img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
   }
 
   .print-header { display: none; padding: 16px 24px 0; }
