@@ -300,6 +300,7 @@
   .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); }
   .creative-badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 4px; color: #fff; font-family: 'Syne', sans-serif; }
+  .creative-status-badge { position: absolute; top: 8px; left: 8px; font-size: 9px; font-weight: 600; padding: 3px 7px; border-radius: 3px; color: #fff; letter-spacing: 0.6px; backdrop-filter: blur(4px); }
   .creative-meta { padding: 10px 12px; }
   .creative-name { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .creative-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; }
@@ -1092,7 +1093,7 @@ async function loadData() {
       const ttCampFields = ['campaign','spend','impressions','clicks','reach','cpm','complete_payment','complete_payment_roas'];
       // TikTok rejects the entire request if any image URL has permission issues.
       // Fetch performance fields first, then attempt to fetch images separately.
-      const ttCreativeFields = ['ad_name','ad_id','spend','impressions','clicks','complete_payment','complete_payment_roas'];
+      const ttCreativeFields = ['ad_name','ad_id','spend','impressions','clicks','complete_payment','complete_payment_roas','ad_status'];
       const ttCreativeImageFields = ['ad_id','image_url','video_cover_url'];
 
       const [rows, campRows, creativeRows] = await Promise.all([
@@ -1156,8 +1157,8 @@ async function loadData() {
       : ['campaign','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const creativeFields = isLeadGen
-      ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase']
-      : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
+      ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status']
+      : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status'];
     const creativeImageFields = ['ad_id','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
@@ -1743,8 +1744,21 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           const badgeColor = breakEvenRoas
             ? (roas >= targetRoas ? '#1D9E75' : roas >= breakEvenRoas ? '#C97B0A' : '#E24B4A')
             : (roas>=2?'#1D9E75':roas>=1?'#C97B0A':'#E24B4A');
+          // Status badge — green for active, grey for inactive/paused, hidden if unknown
+          const status = (c.status || '').toUpperCase();
+          const isActive = ['ACTIVE','ENABLE'].includes(status);
+          const isPaused = ['PAUSED','DISABLE','SUSPEND'].includes(status);
+          const isArchived = ['ARCHIVED','DELETED','DELETE'].includes(status);
+          let statusBadge = '';
+          if (isActive) {
+            statusBadge = `<div class="creative-status-badge" style="background:rgba(29,158,117,0.92);"><span style="display:inline-block;width:6px;height:6px;background:#fff;border-radius:50%;margin-right:5px;vertical-align:middle;"></span>LIVE</div>`;
+          } else if (isPaused) {
+            statusBadge = `<div class="creative-status-badge" style="background:rgba(90,88,86,0.92);">PAUSED</div>`;
+          } else if (isArchived) {
+            statusBadge = `<div class="creative-status-badge" style="background:rgba(40,42,46,0.92);color:#86878a;">OFF</div>`;
+          }
           const displayImg = imgProxy(c.thumbnail_url || c.image_url);
-          return `<div class="creative-card">
+          return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
             <div class="creative-thumb">
               ${displayImg
                 ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
@@ -1752,6 +1766,7 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
+              ${statusBadge}
               ${showBadge ? `<div class="creative-badge" style="background:${badgeColor}">${roas.toFixed(1)}x</div>` : ''}
             </div>
             <div class="creative-meta">
@@ -1914,7 +1929,7 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
     if (!map[id]) map[id] = {
       id, name: r.ad_name || 'Unknown',
       spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0,
-      image_url: null, thumbnail_url: null
+      image_url: null, thumbnail_url: null, status: null
     };
     const rowSpend = parseFloat(r.spend||0);
     map[id].spend += rowSpend;
@@ -1932,6 +1947,14 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
     }
     if (!map[id].image_url && (r.image_url||r.video_cover_url)) map[id].image_url = r.image_url||r.video_cover_url;
     if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
+    // Track status — Meta uses effective_status (ACTIVE/PAUSED/ARCHIVED/DELETED),
+    // TikTok uses ad_status (ENABLE/DISABLE/DELETE/SUSPEND etc).
+    // Prefer ACTIVE/ENABLE over other values across multiple rows for the same ad.
+    const rowStatus = (r.effective_status || r.ad_status || '').toUpperCase();
+    if (rowStatus) {
+      const isActive = ['ACTIVE','ENABLE'].includes(rowStatus);
+      if (!map[id].status || isActive) map[id].status = rowStatus;
+    }
   });
   return Object.values(map).filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend);
 }
