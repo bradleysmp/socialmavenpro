@@ -2146,18 +2146,49 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
 
   // ── Build GA4 lookup — multiple join strategies:
   // 1. Direct item_id (Fragrance Samples slug-based)
-  // 2. Last segment of Shopify variant ID e.g. shopify_GB_123_456789 → 456789 (CHO, Alchemy)
+  // 2. Last numeric segment — Shopify variant ID (CHO, Alchemy)
+  // 3. Middle numeric segment — Shopify product ID (catalogues using parent IDs)
+  // 4. Lowercased exact name match — last resort when IDs don't align (B&G split-feed case)
   const ga4Map = {};
-  const ga4MapVariant = {};
+  const ga4MapVariant = {};   // by last numeric segment
+  const ga4MapMiddle  = {};   // by middle numeric segment (parent product ID)
+  const ga4MapName    = {};   // by lowercased item_name — set to null if duplicate
+  const ga4NameCounts = {};
   (ga4Rows||[]).forEach(r => {
     const id = (r.item_id||'').trim();
     if (!id) return;
     ga4Map[id.toLowerCase()] = r;
-    // Also index by last numeric segment (Shopify variant ID)
-    const parts = id.split('_');
-    const lastSegment = parts[parts.length - 1];
-    if (lastSegment && /^\d+$/.test(lastSegment)) {
+    // Index by numeric segments — supports both shopify_GB_PRODUCT_VARIANT and shopify_ZZ_PRODUCT_VARIANT
+    const numericSegments = id.split('_').filter(s => /^\d+$/.test(s));
+    if (numericSegments.length >= 1) {
+      const lastSegment = numericSegments[numericSegments.length - 1];
       ga4MapVariant[lastSegment] = r;
+    }
+    if (numericSegments.length >= 2) {
+      // Second-to-last numeric segment = Shopify product ID (parent)
+      const middleSegment = numericSegments[numericSegments.length - 2];
+      ga4MapMiddle[middleSegment] = r;
+    }
+    // Name index — track count to avoid collisions
+    const name = (r.item_name||'').trim().toLowerCase();
+    if (name) {
+      ga4NameCounts[name] = (ga4NameCounts[name]||0) + 1;
+      if (ga4NameCounts[name] === 1) {
+        ga4MapName[name] = r;
+      } else {
+        // Sum metrics across duplicate names so the total is still accurate
+        const existing = ga4MapName[name];
+        if (existing) {
+          ga4MapName[name] = {
+            ...existing,
+            items_purchased: parseFloat(existing.items_purchased||0) + parseFloat(r.items_purchased||0),
+            item_revenue: parseFloat(existing.item_revenue||0) + parseFloat(r.item_revenue||0),
+            items_viewed: parseFloat(existing.items_viewed||0) + parseFloat(r.items_viewed||0),
+            items_added_to_cart: parseFloat(existing.items_added_to_cart||0) + parseFloat(r.items_added_to_cart||0),
+            _name_aggregated: true,
+          };
+        }
+      }
     }
   });
 
@@ -2191,10 +2222,19 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     const cat = catMap[m.id] || null;
     const qty = stockMap[m.id] || 0;
 
-    // GA4 join — try multiple strategies:
-    // 1. Direct slug match (Fragrance Samples)
-    // 2. Shopify variant ID — last numeric segment of GA4 item_id (CHO, Alchemy London)
-    const ga4 = ga4Map[idLower] || ga4Map[baseSlug] || ga4MapVariant[m.id] || null;
+    // GA4 join — try multiple strategies in order of reliability:
+    // 1. Direct item_id slug match (Fragrance Samples)
+    // 2. Last segment numeric match — Shopify variant ID (CHO, Alchemy)
+    // 3. Middle segment numeric match — Shopify product ID for catalogues using parent IDs
+    // 4. Lowercased item_name match — fallback when IDs don't align (B&G split UK/US feeds)
+    //    Only matches if name was unique in GA4 OR was aggregated across duplicates
+    const metaNameLower = (m.name||'').trim().toLowerCase();
+    const ga4 = ga4Map[idLower]
+      || ga4Map[baseSlug]
+      || ga4MapVariant[m.id]
+      || ga4MapMiddle[m.id]
+      || (metaNameLower ? ga4MapName[metaNameLower] : null)
+      || null;
 
     // Meta signals
     const metaCtr = m.impressions > 0 ? m.clicks/m.impressions*100 : 0;
