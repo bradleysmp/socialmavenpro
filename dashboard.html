@@ -2208,8 +2208,35 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
     metaMap[id].clicks      += parseFloat(r.clicks||0);
   });
 
+  // ── Deduplicate Meta products by name
+  // Some catalogues (e.g. B&G after the split-feed event) contain multiple product IDs
+  // for the same underlying product. Summing across duplicates gives the true Meta spend
+  // and prevents GA4 join inflation (the same GA4 row would otherwise be claimed multiple times).
+  // Products without a name (no comma-separated format) stay keyed by ID so behaviour is unchanged
+  // for accounts like CP Lighting / Decorum that don't use the slug-name format.
+  const dedupMap = {};
+  Object.values(metaMap).forEach(m => {
+    const nameLower = (m.name||'').trim().toLowerCase();
+    // If no name available, key by ID (unchanged behaviour for catalogues without comma format)
+    const key = nameLower || `__id_${m.id}`;
+    if (!dedupMap[key]) {
+      dedupMap[key] = {
+        id: m.id,        // primary ID (first one seen — used for display)
+        name: m.name,
+        spend: 0,
+        impressions: 0,
+        clicks: 0,
+        duplicateIds: [], // track all merged IDs for the recommendation column
+      };
+    }
+    dedupMap[key].spend       += m.spend;
+    dedupMap[key].impressions += m.impressions;
+    dedupMap[key].clicks      += m.clicks;
+    dedupMap[key].duplicateIds.push(m.id);
+  });
+
   // ── Join and build product list — top 30 by spend, hide out-of-stock
-  const allProducts = Object.values(metaMap)
+  const allProducts = Object.values(dedupMap)
     .filter(m => m.spend > 0)
     .sort((a,b) => b.spend - a.spend)
     .slice(0, 30);
@@ -2329,9 +2356,15 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
       recReason = `Keep in feed — not enough signal to act on yet`;
     }
 
+    // Surface duplicate catalogue entries — this is a real data-quality signal worth showing
+    const dupCount = m.duplicateIds ? m.duplicateIds.length : 1;
+    if (dupCount > 1) {
+      recReason = `⚠ ${dupCount} duplicate catalogue IDs · ${recReason}`;
+    }
+
     return { id:m.id, name:displayName, thumb, price, inStock, qty, stockSignal, stockColor,
              metaSpend:m.spend, metaCtr, metaCpc, ptv, ctv, ga4Purchases, ga4Revenue, ga4Views,
-             impliedCpa, score, rec, recColor, recReason };
+             impliedCpa, score, rec, recColor, recReason, duplicateCount: dupCount };
   // Hide out-of-stock products entirely — no point showing what can't be sold
   }).filter(p => !hasMerchant || p.inStock);
 
