@@ -452,6 +452,10 @@
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
       Products
     </button>
+    <button class="ptab" onclick="setPlatform('journey',this)" id="tab-journey" style="display:none">
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#8B7CD8"/><circle cx="4" cy="8" r="1.5" fill="white"/><circle cx="12" cy="8" r="1.5" fill="white"/><path d="M5.5 8h5" stroke="white" stroke-width="1.3" stroke-linecap="round"/><path d="M8 5v6" stroke="white" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/></svg>
+      Journey
+    </button>
   </div>
 
   <div class="print-header" id="print-header">
@@ -507,6 +511,7 @@ const CLIENTS = {
     '356228681': '877017732651263',  // CP Lighting & Interiors
     '384291911': '468452590544702',  // Decorum Living
     '384236712': '223014600213426',  // Alchemy London
+    '413882715': '783788426913932',  // Babble & Goose
   },
   // Google Merchant Center account → Meta account mapping
   merchant: {
@@ -714,6 +719,7 @@ function selectClient(id) {
   document.getElementById('tab-tiktok').style.display = hasTikTok ? '' : 'none';
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
+  document.getElementById('tab-journey').style.display = hasGA4 ? '' : 'none';
   // Hide Meta tab for TikTok-only clients and auto-select TikTok
   const metaTab = document.getElementById('tab-meta');
   if (metaTab) {
@@ -1103,6 +1109,50 @@ async function loadData() {
       }
 
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
+      return;
+    }
+
+    // ── CUSTOMER JOURNEY ANALYSIS (GA4-powered) ──
+    // Shows where Meta sits in the multi-touch journey: first-touch (demand creation)
+    // vs last-touch (closing attribution). Quantifies the assist gap GA4 last-click misses.
+    if (connector === 'journey') {
+      const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
+      if (!ga4Id) { showError('No GA4 account linked for this client.'); return; }
+
+      showLoading('Fetching first-touch journey data…');
+      // First-touch dimension shows the channel that first acquired this user (ever)
+      // Last-touch dimension is the session channel for the converting session
+      const firstTouchFields = ['first_user_default_channel_group', 'sessions', 'key_events', 'purchase_revenue'];
+      const lastTouchFields  = ['session_default_channel_group', 'sessions', 'key_events', 'purchase_revenue'];
+
+      let firstTouchRows = [], lastTouchRows = [];
+      try {
+        firstTouchRows = await fetchWindsorDirect('googleanalytics4', ga4Id, firstTouchFields, state.period, state.dateFrom, state.dateTo, -1);
+      } catch(e) {
+        try {
+          firstTouchRows = await fetchWindsor('googleanalytics4', ga4Id, firstTouchFields, state.period, {}, state.dateFrom, state.dateTo);
+        } catch(e2) { console.warn('First-touch fetch failed:', e2.message); }
+      }
+      try {
+        lastTouchRows = await fetchWindsorDirect('googleanalytics4', ga4Id, lastTouchFields, state.period, state.dateFrom, state.dateTo, -1);
+      } catch(e) {
+        try {
+          lastTouchRows = await fetchWindsor('googleanalytics4', ga4Id, lastTouchFields, state.period, {}, state.dateFrom, state.dateTo);
+        } catch(e2) { console.warn('Last-touch fetch failed:', e2.message); }
+      }
+
+      // Also pull Meta-attributed conversions for the same period so the gap can be shown
+      let metaPlatformConversions = 0, metaPlatformRevenue = 0, metaSpend = 0;
+      try {
+        const metaRows = await fetchWindsor('facebook', state.client, ['actions_purchase', 'action_values_offsite_conversion_fb_pixel_purchase', 'spend'], state.period, {}, state.dateFrom, state.dateTo);
+        metaRows.forEach(r => {
+          metaPlatformConversions += parseFloat(r.actions_purchase||0);
+          metaPlatformRevenue += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+          metaSpend += parseFloat(r.spend||0);
+        });
+      } catch(e) { console.warn('Meta platform data fetch failed:', e.message); }
+
+      renderJourneyAnalysis(firstTouchRows, lastTouchRows, { metaPlatformConversions, metaPlatformRevenue, metaSpend });
       return;
     }
 
@@ -2308,6 +2358,193 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           ${renderDPARows(joined, hasMerchant, hasGA4Joined, hasGA4Connected)}
         </tbody>
       </table>
+    </div>
+  </div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+// ─── CUSTOMER JOURNEY ANALYSIS ─────────────────────────────────────
+// Shows where Meta (and other channels) sits in the conversion journey.
+// First-touch = channel that originally acquired the user. Last-touch = channel
+// that closed the sale. The gap between them tells the demand-creation story.
+function renderJourneyAnalysis(firstTouchRows, lastTouchRows, meta) {
+  const fmt = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
+  const fmtN = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
+
+  // Aggregate by channel group
+  const aggByChannel = (rows, channelField) => {
+    const map = {};
+    (rows||[]).forEach(r => {
+      const ch = r[channelField] || '(not set)';
+      if (!map[ch]) map[ch] = { sessions: 0, conversions: 0, revenue: 0 };
+      map[ch].sessions += parseFloat(r.sessions||0);
+      map[ch].conversions += parseFloat(r.key_events||0);
+      map[ch].revenue += parseFloat(r.purchase_revenue||0);
+    });
+    return map;
+  };
+
+  const firstTouch = aggByChannel(firstTouchRows, 'first_user_default_channel_group');
+  const lastTouch  = aggByChannel(lastTouchRows, 'session_default_channel_group');
+
+  // Combine — get all channel names across both views
+  const allChannels = new Set([...Object.keys(firstTouch), ...Object.keys(lastTouch)]);
+  const channelRows = Array.from(allChannels).map(ch => ({
+    channel: ch,
+    firstSessions: firstTouch[ch]?.sessions || 0,
+    firstConversions: firstTouch[ch]?.conversions || 0,
+    firstRevenue: firstTouch[ch]?.revenue || 0,
+    lastSessions: lastTouch[ch]?.sessions || 0,
+    lastConversions: lastTouch[ch]?.conversions || 0,
+    lastRevenue: lastTouch[ch]?.revenue || 0,
+  })).filter(r => r.firstSessions > 0 || r.lastSessions > 0)
+    .sort((a, b) => (b.firstConversions + b.lastConversions) - (a.firstConversions + a.lastConversions));
+
+  // Headline figures
+  const totalFirstConv = Object.values(firstTouch).reduce((s, c) => s + c.conversions, 0);
+  const totalLastConv  = Object.values(lastTouch).reduce((s, c) => s + c.conversions, 0);
+  const totalFirstRev  = Object.values(firstTouch).reduce((s, c) => s + c.revenue, 0);
+  const totalLastRev   = Object.values(lastTouch).reduce((s, c) => s + c.revenue, 0);
+
+  // Find paid social specifically (channel name may vary across accounts)
+  const findPaidSocial = (map) => {
+    const keys = Object.keys(map);
+    const ps = keys.find(k => /paid.*social/i.test(k)) || keys.find(k => /social/i.test(k) && !/organic/i.test(k));
+    return ps ? map[ps] : null;
+  };
+  const psFirst = findPaidSocial(firstTouch) || { sessions:0, conversions:0, revenue:0 };
+  const psLast  = findPaidSocial(lastTouch)  || { sessions:0, conversions:0, revenue:0 };
+
+  // The big gap: Meta platform-attributed vs GA4 last-touch
+  const metaPlatform = meta?.metaPlatformConversions || 0;
+  const ga4LastSocial = psLast.conversions;
+  const ga4FirstSocial = psFirst.conversions;
+  const gapPct = ga4LastSocial > 0 ? ((metaPlatform - ga4LastSocial) / ga4LastSocial * 100) : 0;
+  const firstVsLastLift = ga4LastSocial > 0 ? (ga4FirstSocial / ga4LastSocial) : 0;
+
+  // Channel comparison bars — show channel share of conversions under each model
+  const top10 = channelRows.slice(0, 10);
+  const maxConv = Math.max(...top10.flatMap(r => [r.firstConversions, r.lastConversions]), 1);
+
+  const channelColor = (ch) => {
+    const c = (ch||'').toLowerCase();
+    if (c.includes('paid social')) return '#1877F2';
+    if (c.includes('paid search')) return '#34A853';
+    if (c.includes('organic search')) return '#FBBC04';
+    if (c.includes('organic social')) return '#E91E63';
+    if (c.includes('direct')) return '#9E9E9E';
+    if (c.includes('email')) return '#EA4335';
+    if (c.includes('referral')) return '#8B7CD8';
+    if (c.includes('display')) return '#FF6B35';
+    return '#666666';
+  };
+
+  const html = `
+  <div style="padding:0 4px;">
+    <!-- Header -->
+    <div style="margin-bottom:24px;">
+      <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--text);margin:0 0 4px;">Customer Journey Analysis</h2>
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.5;">
+        Comparing <strong style="color:var(--text);">first-touch</strong> (the channel that originally acquired the user) vs
+        <strong style="color:var(--text);">last-touch</strong> (the channel that closed the conversion).
+        Powered by GA4 — uses standard channel groups.
+      </div>
+    </div>
+
+    <!-- HEADLINE METRIC: The Attribution Gap -->
+    <div style="background:linear-gradient(135deg, rgba(24,119,242,0.08) 0%, rgba(139,124,216,0.08) 100%);border:1px solid rgba(24,119,242,0.3);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;margin-bottom:10px;">⚡ The Paid Social Attribution Gap</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:end;">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Meta platform claims</div>
+          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:#1877F2;line-height:1;">${fmtN(metaPlatform)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">purchases · ${fmt(meta?.metaPlatformRevenue)} revenue</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">GA4 last-touch credits</div>
+          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--amber);line-height:1;">${fmtN(ga4LastSocial)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">conversions · ${fmt(psLast.revenue)} revenue</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Under-attributed by</div>
+          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--green);line-height:1;">${gapPct > 0 ? '+' : ''}${gapPct.toFixed(0)}%</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${fmtN(metaPlatform - ga4LastSocial)} purchases credited elsewhere</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;color:var(--text-dim);line-height:1.6;">
+        GA4 last-touch only credits Paid Social when it's the <em>final</em> click before purchase. Conversions where Meta was an
+        earlier touch — but customer returned via Direct, Email, or Search — get credited to those channels.
+        <strong style="color:var(--text);">Meta's true contribution sits between these two numbers.</strong>
+      </div>
+    </div>
+
+    <!-- First-Touch vs Last-Touch Headline -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:18px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;margin-bottom:10px;">First-Touch Paid Social</div>
+        <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--text);">${fmtN(psFirst.conversions)} conversions</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">${fmtN(psFirst.sessions)} first-touch sessions · ${fmt(psFirst.revenue)} attributed revenue</div>
+        <div style="margin-top:10px;font-size:12px;color:var(--green);">${firstVsLastLift > 1 ? `${firstVsLastLift.toFixed(2)}x more than last-touch` : 'Demand-creation contribution'}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:18px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;margin-bottom:10px;">Last-Touch Paid Social</div>
+        <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--text);">${fmtN(psLast.conversions)} conversions</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">${fmtN(psLast.sessions)} closing sessions · ${fmt(psLast.revenue)} closing revenue</div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text-muted);">Closing attribution only</div>
+      </div>
+    </div>
+
+    <!-- Channel Comparison Chart -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">Channel Comparison: First-Touch vs Last-Touch</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Top 10 channels by conversion contribution</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;">Channel</th>
+            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:14%;">First-Touch</th>
+            <th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:38%;">Contribution</th>
+            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:14%;">Last-Touch</th>
+            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:12%;">Lift Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${top10.map(r => {
+            const firstPct = (r.firstConversions / maxConv) * 100;
+            const lastPct = (r.lastConversions / maxConv) * 100;
+            const lift = r.lastConversions > 0 ? (r.firstConversions / r.lastConversions) : null;
+            const liftColor = lift === null ? 'var(--text-muted)' : (lift > 1.5 ? 'var(--green)' : lift < 0.7 ? 'var(--amber)' : 'var(--text-dim)');
+            const color = channelColor(r.channel);
+            return `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px;font-size:13px;color:var(--text);">
+                  <span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:2px;margin-right:8px;vertical-align:middle;"></span>${r.channel}
+                </td>
+                <td style="padding:10px;font-size:13px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;">${fmtN(r.firstConversions)}</td>
+                <td style="padding:10px;">
+                  <div style="position:relative;height:18px;display:flex;align-items:center;gap:2px;">
+                    <div style="background:${color};opacity:0.85;height:8px;width:${firstPct}%;border-radius:2px;"></div>
+                  </div>
+                  <div style="position:relative;height:18px;display:flex;align-items:center;gap:2px;margin-top:-4px;">
+                    <div style="background:${color};opacity:0.4;height:8px;width:${lastPct}%;border-radius:2px;"></div>
+                  </div>
+                </td>
+                <td style="padding:10px;font-size:13px;color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">${fmtN(r.lastConversions)}</td>
+                <td style="padding:10px;font-size:13px;color:${liftColor};text-align:right;font-weight:600;font-variant-numeric:tabular-nums;">${lift !== null ? lift.toFixed(2) + 'x' : '–'}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);line-height:1.6;">
+        <strong style="color:var(--text-dim);">Reading the chart:</strong> Solid bars = first-touch conversions (where the channel acquired the user). Faded bars = last-touch (where the channel closed the conversion). Lift ratio &gt;1.5x means the channel acquires more users than it closes — strong demand-creation signal.
+      </div>
+    </div>
+
+    <!-- Period Totals -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:18px;font-size:12px;color:var(--text-muted);">
+      <strong style="color:var(--text-dim);">Period totals:</strong> ${fmtN(totalFirstConv)} first-touch attributed conversions · ${fmtN(totalLastConv)} last-touch attributed conversions · ${fmt(totalLastRev)} total revenue (GA4)
+      ${meta?.metaSpend > 0 ? `· ${fmt(meta.metaSpend)} Meta spend in same period` : ''}
     </div>
   </div>`;
 
