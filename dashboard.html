@@ -220,6 +220,16 @@
   .state-box svg { opacity: 0.3; }
   .state-box p { font-size: 13px; }
   .spinner { width: 28px; height: 28px; border: 2px solid var(--border2); border-top-color: var(--orange); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  /* Skeleton loading states */
+  @keyframes skeleton-pulse { 0%,100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+  .skeleton-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .skeleton-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; height: 96px; animation: skeleton-pulse 1.4s ease-in-out infinite; }
+  .skeleton-block { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; animation: skeleton-pulse 1.4s ease-in-out infinite; }
+  .skeleton-msg { font-size: 12px; color: var(--text-muted); margin: 14px 0 0; text-align: center; }
+  /* Client search */
+  .client-search { display: block; width: calc(100% - 28px); margin: 0 14px 8px; padding: 7px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; font-family: inherit; outline: none; }
+  .client-search:focus { border-color: var(--border2); }
+  .client-search::placeholder { color: var(--text-muted); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* SCROLLBAR */
@@ -370,6 +380,8 @@
   </div>
 
   <div class="sidebar-section">Clients</div>
+  <input class="client-search" id="client-search" type="text" placeholder="Search clients…"
+         oninput="filterClients(this.value)" autocomplete="off" />
   <div id="client-list"></div>
 
   <div class="sidebar-footer">
@@ -441,12 +453,16 @@
 
   <div class="platform-tabs" id="platform-tabs" style="display:none">
     <button class="ptab active" id="tab-meta" onclick="setPlatform('facebook',this)">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#1877F2"/><path d="M10.5 8.5H9v5H7v-5H5.5V6.5H7V5.3C7 3.8 7.9 3 9.2 3c.6 0 1.3.1 1.8.1V4.7h-1c-.7 0-.8.3-.8.8v1h1.7l-.4 2z" fill="white"/></svg>
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#0866FF"/><g transform="translate(1.6 1.6) scale(0.535)"><path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z" fill="white"/></g></svg>
       Meta
     </button>
     <button class="ptab" onclick="setPlatform('tiktok',this)" id="tab-tiktok" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#000"/><path d="M11 3h-1.5A2.5 2.5 0 007 5.5V10a1.5 1.5 0 11-1.5-1.5v-1.6A3.1 3.1 0 105.5 13V5.5A4 4 0 009.5 9V7.4A2.5 2.5 0 0111 7.5V6a4 4 0 01-1-.5V3z" fill="white"/></svg>
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#000"/><g transform="translate(2.1 1.9) scale(0.51)"><path d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" fill="#25F4EE" transform="translate(-1 -1)"/><path d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" fill="#FE2C55" transform="translate(1 1)"/><path d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" fill="white"/></g></svg>
       TikTok
+    </button>
+    <button class="ptab" onclick="setPlatform('pinterest',this)" id="tab-pinterest" style="display:none">
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><g transform="scale(0.6667)"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z" fill="#E60023"/></g></svg>
+      Pinterest
     </button>
     <button class="ptab" onclick="setPlatform('dpa',this)" id="tab-dpa" style="display:none">
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
@@ -680,13 +696,75 @@ function toggleSidebar() {
   toggle.classList.toggle('collapsed');
 }
 
-function init() {
+function renderClientList(filter = '') {
   const list = document.getElementById('client-list');
-  list.innerHTML = CLIENTS.facebook.map(c => `
-    <button class="client-btn" onclick="selectClient('${c.id}')" id="cb-${c.id}">
+  let recents = [];
+  try { recents = JSON.parse(localStorage.getItem('smp_recent_clients') || '[]'); } catch(e) {}
+
+  // Recents first (in recency order), then the rest alphabetically
+  const clients = [...CLIENTS.facebook];
+  const recentSet = new Set(recents);
+  const ordered = [
+    ...recents.map(id => clients.find(c => c.id === id)).filter(Boolean),
+    ...clients.filter(c => !recentSet.has(c.id)).sort((a, b) => a.name.localeCompare(b.name)),
+  ];
+
+  const f = filter.trim().toLowerCase();
+  const visible = f ? ordered.filter(c => c.name.toLowerCase().includes(f)) : ordered;
+
+  list.innerHTML = visible.map((c, i) => {
+    const isRecent = recentSet.has(c.id) && !f;
+    const divider = (!f && isRecent === false && i > 0 && recentSet.has(visible[i-1].id))
+      ? '<div style="height:1px;background:var(--border);margin:6px 10px;"></div>' : '';
+    return `${divider}<button class="client-btn${state.client === c.id ? ' active' : ''}" onclick="selectClient('${c.id}')" id="cb-${c.id}"
+      onmouseenter="schedulePrefetch('${c.id}')" onmouseleave="cancelPrefetch()">
       <span class="client-dot"></span>
       <span class="client-name">${c.name}</span>
-    </button>`).join('');
+    </button>`;
+  }).join('') || '<div style="padding:10px 14px;font-size:12px;color:var(--text-muted);">No clients match</div>';
+}
+
+function filterClients(value) {
+  renderClientList(value);
+}
+
+// ─── HOVER PREFETCH ────────────────────────────────────────
+// After 200ms hovering a client, quietly warm the cache with its primary
+// tab data so clicking feels instant. Errors are swallowed silently.
+let _prefetchTimer = null;
+function schedulePrefetch(id) {
+  cancelPrefetch();
+  _prefetchTimer = setTimeout(() => prefetchClient(id), 200);
+}
+function cancelPrefetch() {
+  if (_prefetchTimer) { clearTimeout(_prefetchTimer); _prefetchTimer = null; }
+}
+async function prefetchClient(id) {
+  if (!state.apiKey || id === state.client) return;
+  try {
+    const clientConfig = CLIENTS.facebook.find(c => c.id === id);
+    const isTikTokOnly = clientConfig?.tiktokOnly === true;
+    let connector = 'facebook';
+    let accountId = id;
+    if (isTikTokOnly) {
+      connector = 'tiktok';
+      accountId = Object.entries(CLIENTS.tiktok||{}).find(([k,v])=>v===id)?.[0] || id;
+    }
+    const isLeadGen = LEAD_GEN_CLIENTS.includes(accountId);
+    // Mirror the exact field lists loadData uses so cache keys match
+    const fields = connector === 'tiktok'
+      ? ['date','spend','impressions','clicks','reach','cpm','ctr','complete_payment','complete_payment_roas','cost_per_complete_payment']
+      : (isLeadGen
+        ? ['date','account_id','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead','cost_per_action_type_offsite_conversion_fb_pixel_purchase','actions_landing_page_view']
+        : ['date','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase']);
+    await fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo);
+  } catch(e) { /* prefetch is best-effort — never surface errors */ }
+}
+
+function init() {
+  renderClientList();
+  // Restore state from the URL hash if present (deep-link / refresh persistence)
+  restoreFromHash();
 }
 
 // ─── API KEY ───────────────────────────────────────────────
@@ -701,7 +779,16 @@ function saveApiKey() {
 // ─── CLIENT SELECT ─────────────────────────────────────────
 function selectClient(id) {
   state.client = id;
-  state.cache = {};
+  // NOTE: cache intentionally NOT cleared — keys include account IDs, and the
+  // 10-min TTL handles freshness. Revisiting a client within TTL is instant.
+
+  // Track recently-viewed clients for sidebar ordering
+  try {
+    let recents = JSON.parse(localStorage.getItem('smp_recent_clients') || '[]');
+    recents = [id, ...recents.filter(r => r !== id)].slice(0, 5);
+    localStorage.setItem('smp_recent_clients', JSON.stringify(recents));
+  } catch(e) {}
+
   document.querySelectorAll('.client-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('cb-' + id);
   if (btn) btn.classList.add('active');
@@ -720,6 +807,9 @@ function selectClient(id) {
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
   document.getElementById('tab-journey').style.display = hasGA4 ? '' : 'none';
+  const hasPinterest = Object.values(CLIENTS.pinterest||{}).includes(id);
+  const pinTab = document.getElementById('tab-pinterest');
+  if (pinTab) pinTab.style.display = hasPinterest ? '' : 'none';
   // Hide Meta tab for TikTok-only clients and auto-select TikTok
   const metaTab = document.getElementById('tab-meta');
   if (metaTab) {
@@ -738,11 +828,55 @@ function selectClient(id) {
     }
   }
 
+  // Restore a specific tab from the URL hash (deep-link support)
+  if (state._restoreTab) {
+    const tabIds = { facebook:'tab-meta', tiktok:'tab-tiktok', dpa:'tab-dpa', journey:'tab-journey', pinterest:'tab-pinterest' };
+    const targetTabId = tabIds[state._restoreTab];
+    const targetEl = targetTabId ? document.getElementById(targetTabId) : null;
+    const isAvailable = targetEl && targetEl.style.display !== 'none';
+    if (isAvailable) {
+      document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+      if (targetEl) targetEl.classList.add('active');
+      state.platform = state._restoreTab;
+    }
+    state._restoreTab = null;
+  }
+
+  writeHash();
+
   if (!state.apiKey) {
     showError('Add your Windsor.ai API key in the sidebar to load data.');
     return;
   }
   loadData();
+}
+
+// ─── URL HASH ROUTING ──────────────────────────────────────
+// Persists client/tab/period in the URL so refresh keeps your place
+// and views can be bookmarked or shared.
+function writeHash() {
+  if (!state.client) return;
+  const parts = [`client=${state.client}`, `tab=${state.platform}`, `period=${state.period}`];
+  if (state.dateFrom && state.dateTo) parts.push(`from=${state.dateFrom}`, `to=${state.dateTo}`);
+  history.replaceState(null, '', '#' + parts.join('&'));
+}
+
+function restoreFromHash() {
+  const h = location.hash.slice(1);
+  if (!h) return false;
+  const p = {};
+  h.split('&').forEach(kv => { const [k, v] = kv.split('='); if (k && v) p[k] = decodeURIComponent(v); });
+  if (!p.client || !CLIENTS.facebook.find(c => c.id === p.client)) return false;
+  if (p.period) state.period = p.period;
+  if (p.from && p.to) { state.dateFrom = p.from; state.dateTo = p.to; }
+  // Sync the period button highlight
+  document.querySelectorAll('.period-btn').forEach(b => {
+    const on = (b.getAttribute('onclick')||'').includes(`'${state.period}'`);
+    b.classList.toggle('active', on);
+  });
+  state._restoreTab = p.tab || null;
+  selectClient(p.client);
+  return true;
 }
 
 // ─── PERIOD / PLATFORM ────────────────────────────────────
@@ -754,6 +888,7 @@ function setPreset(period, btn) {
   if (btn) btn.classList.add('active');
   document.getElementById('btn-compare').style.display = '';
   document.getElementById('date-picker').style.display = 'none';
+  writeHash();
   if (state.client) loadData();
 }
 
@@ -803,6 +938,7 @@ function applyCustomDates() {
   document.getElementById('btn-custom').textContent = `${formatDateShort(from)} – ${formatDateShort(to)} ▾`;
   document.getElementById('btn-compare').style.display = '';
   document.getElementById('date-picker').style.display = 'none';
+  writeHash();
   if (state.client) loadData();
 }
 
@@ -814,7 +950,7 @@ function toggleCompare() {
 
 function setCompareMode(mode) {
   state.compareMode = mode;
-  state.cache = {};
+  // Cache intentionally kept — keys include date ranges, so compare fetches don't collide
   ['cmp-prev','cmp-year','cmp-none'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -902,13 +1038,29 @@ function setPlatform(platform, btn) {
   state.platform = platform;
   document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  writeHash();
   if (state.client) loadData();
 }
 
 // ─── WINDSOR FETCH ─────────────────────────────────────────
+// ─── RESPONSE CACHE ────────────────────────────────────────
+// In-memory, 10-minute TTL. Keys include client/account so entries survive
+// switching between clients — revisiting a client within 10 min is instant.
+const CACHE_TTL_MS = 10 * 60 * 1000;
+function cacheGet(key) {
+  const entry = state.cache[key];
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) { delete state.cache[key]; return null; }
+  return entry.data;
+}
+function cacheSet(key, data) {
+  state.cache[key] = { data, ts: Date.now() };
+}
+
 async function fetchWindsor(connector, accountId, fields, datePreset, options = {}, dateFrom = null, dateTo = null) {
   const cacheKey = `${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}_${JSON.stringify(options)}`;
-  if (state.cache[cacheKey]) return state.cache[cacheKey];
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
 
   // Extract proxy-level flags from options so they're sent at top level of request
   const { top_n_by_spend, min_spend, strip_zero_spend, ...connectorOptions } = options || {};
@@ -937,14 +1089,15 @@ async function fetchWindsor(connector, accountId, fields, datePreset, options = 
   }
   const json = await res.json();
   const data = json.data || json;
-  state.cache[cacheKey] = data;
+  cacheSet(cacheKey, data);
   return data;
 }
 
 // Direct Windsor fetch — bypasses Netlify proxy for large requests
 async function fetchWindsorDirect(connector, accountId, fields, datePreset, dateFrom = null, dateTo = null, minSpend = 0) {
   const cacheKey = `direct_${connector}_${accountId}_${fields.join(',')}_${datePreset}_${dateFrom}_${dateTo}_${minSpend}`;
-  if (state.cache[cacheKey]) return state.cache[cacheKey];
+  const cachedDirect = cacheGet(cacheKey);
+  if (cachedDirect) return cachedDirect;
 
   // Resolve date presets to explicit dates (required for some connectors)
   const now = new Date();
@@ -996,7 +1149,7 @@ async function fetchWindsorDirect(connector, accountId, fields, datePreset, date
   }
   const raw = await res.json();
   const data = Array.isArray(raw) ? raw : (raw.data || []);
-  state.cache[cacheKey] = data;
+  cacheSet(cacheKey, data);
   return data;
 }
 
@@ -1026,46 +1179,10 @@ async function loadData() {
       const metaProductFields = ['product_id','account_id','spend','impressions','clicks'];
       const ga4Fields = ['item_id','item_name','item_revenue','items_purchased','items_viewed','items_added_to_cart','purchase_to_view_rate','cart_to_view_rate'];
 
-      // Fetch GA4 product data directly from Windsor — bypasses Netlify proxy.
-      // GA4 product responses can be 700+ rows which times out through the proxy.
-      showLoading('Fetching GA4 product data…');
-      let ga4Rows = [];
-      try {
-        ga4Rows = await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
-      } catch(e) {
-        console.warn('GA4 direct fetch failed, trying proxy:', e.message);
-        try {
-          ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
-        } catch(e2) {
-          console.warn('GA4 proxy fetch also failed, continuing without GA4 data:', e2.message);
-        }
-      }
+      // All three sources are independent — fetch in parallel (previously three sequential stages)
+      showLoading('Fetching product data…');
 
-      let merchantCat = [], merchantStock = [];
-      if (hasMerchant) {
-        showLoading('Fetching stock data…');
-        try {
-          [merchantCat, merchantStock] = await Promise.all([
-            fetchWindsor('google_merchant', merchantId,
-              ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
-              state.period, {}, state.dateFrom, state.dateTo),
-            fetchWindsor('google_merchant', merchantId,
-              ['product_id','product_sell_on_google_quantity'],
-              state.period, {}, state.dateFrom, state.dateTo),
-          ]);
-        } catch(e) {
-          // Merchant fetch failed (account not connected, permissions etc) — continue without stock data
-          console.warn('Merchant fetch failed, continuing without stock data:', e.message);
-          merchantCat = [];
-          merchantStock = [];
-        }
-      }
-
-      // Fetch Meta product data — try direct browser call first (no proxy size limits)
-      // Falls back to proxy with server-side aggregation if CORS blocks direct call
-      showLoading('Fetching Meta product data…');
-      let metaRows;
-      // Minimum spend filter — kept low enough to surface top 30+ products for all clients
+      // Meta min-spend filter — kept low enough to surface top 30+ products for all clients
       // while still keeping response size manageable for larger catalogues (CP Lighting)
       const minSpendByPeriod = {
         'last_7d':    0.50,
@@ -1083,30 +1200,66 @@ async function loadData() {
       }
       if (!minSpend) minSpend = 1.0;
 
-      // Try direct fetch first — bypasses proxy size limits entirely
-      try {
-        const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo, minSpend);
-        const metaProductMap = {};
-        rawMetaRows.forEach(r => {
-          // Filter to only this client's account
-          const rowAccount = String(r.account_id || '');
-          if (rowAccount && rowAccount !== String(accountId)) return;
-          const pid = r.product_id || '';
-          const spend = parseFloat(r.spend || 0);
-          if (!pid || spend <= 0) return;
-          if (!metaProductMap[pid]) metaProductMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
-          metaProductMap[pid].spend       += spend;
-          metaProductMap[pid].impressions += parseFloat(r.impressions || 0);
-          metaProductMap[pid].clicks      += parseFloat(r.clicks || 0);
-        });
-        metaRows = Object.values(metaProductMap)
-          .sort((a, b) => b.spend - a.spend)
-          .slice(0, 30);
-      } catch(e) {
-        console.warn('Direct fetch failed, using proxy:', e.message);
-        // Proxy fallback — pass min_spend so Windsor filters at source
-        metaRows = await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 30, min_spend: minSpend }, dpaMetaFrom, dpaMetaTo);
-      }
+      const [ga4Rows, merchantData, metaRows] = await Promise.all([
+        // GA4 product data — direct first (700+ row responses time out through proxy), proxy fallback
+        (async () => {
+          try {
+            return await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
+          } catch(e) {
+            console.warn('GA4 direct fetch failed, trying proxy:', e.message);
+            try {
+              return await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+            } catch(e2) {
+              console.warn('GA4 proxy fetch also failed, continuing without GA4 data:', e2.message);
+              return [];
+            }
+          }
+        })(),
+        // Merchant Center stock/catalogue data (if connected)
+        (async () => {
+          if (!hasMerchant) return [[], []];
+          try {
+            return await Promise.all([
+              fetchWindsor('google_merchant', merchantId,
+                ['product_id','product_title','product_availability','product_price','product_brand','product_category_l1','product_thumbnail_link'],
+                state.period, {}, state.dateFrom, state.dateTo),
+              fetchWindsor('google_merchant', merchantId,
+                ['product_id','product_sell_on_google_quantity'],
+                state.period, {}, state.dateFrom, state.dateTo),
+            ]);
+          } catch(e) {
+            console.warn('Merchant fetch failed, continuing without stock data:', e.message);
+            return [[], []];
+          }
+        })(),
+        // Meta product data — direct first (no proxy size limits), proxy fallback with server-side aggregation
+        (async () => {
+          try {
+            const rawMetaRows = await fetchWindsorDirect('facebook', accountId, metaProductFields, dpaMetaPeriod, dpaMetaFrom, dpaMetaTo, minSpend);
+            const metaProductMap = {};
+            rawMetaRows.forEach(r => {
+              // Filter to only this client's account
+              const rowAccount = String(r.account_id || '');
+              if (rowAccount && rowAccount !== String(accountId)) return;
+              const pid = r.product_id || '';
+              const spend = parseFloat(r.spend || 0);
+              if (!pid || spend <= 0) return;
+              if (!metaProductMap[pid]) metaProductMap[pid] = { product_id: pid, spend: 0, impressions: 0, clicks: 0 };
+              metaProductMap[pid].spend       += spend;
+              metaProductMap[pid].impressions += parseFloat(r.impressions || 0);
+              metaProductMap[pid].clicks      += parseFloat(r.clicks || 0);
+            });
+            return Object.values(metaProductMap)
+              .sort((a, b) => b.spend - a.spend)
+              .slice(0, 30);
+          } catch(e) {
+            console.warn('Direct fetch failed, using proxy:', e.message);
+            // Proxy fallback — pass min_spend so Windsor filters at source
+            return await fetchWindsor('facebook', accountId, metaProductFields, dpaMetaPeriod, { top_n_by_spend: 30, min_spend: minSpend }, dpaMetaFrom, dpaMetaTo);
+          }
+        })(),
+      ]);
+      const [merchantCat, merchantStock] = merchantData;
 
       renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, hasMerchant);
       return;
@@ -1119,57 +1272,66 @@ async function loadData() {
       const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
       if (!ga4Id) { showError('No GA4 account linked for this client.'); return; }
 
-      showLoading('Fetching GA4 attribution data…');
+      showLoading('Fetching attribution data…');
       // Use confirmed-working Windsor GA4 fields: source, medium, sessions, conversions, transactionrevenue.
       // The first_user_default_channel_group field does NOT exist in Windsor — only session-level data available.
       const ga4Fields = ['source', 'medium', 'sessions', 'conversions', 'transactionrevenue'];
-
-      let ga4Rows = [];
-      try {
-        ga4Rows = await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
-      } catch(e) {
-        try {
-          ga4Rows = await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
-        } catch(e2) {
-          console.warn('GA4 fetch failed:', e2.message);
-          showError('Could not fetch GA4 attribution data. Check Windsor connection.');
-          return;
-        }
-      }
-
-      // Pull Meta platform-claimed numbers for the same period (the gap denominator)
-      let metaPlatformConversions = 0, metaPlatformRevenue = 0, metaSpend = 0;
-      try {
-        const metaRows = await fetchWindsor('facebook', state.client,
-          ['actions_purchase', 'action_values_offsite_conversion_fb_pixel_purchase', 'spend'],
-          state.period, {}, state.dateFrom, state.dateTo);
-        metaRows.forEach(r => {
-          metaPlatformConversions += parseFloat(r.actions_purchase||0);
-          metaPlatformRevenue += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
-          metaSpend += parseFloat(r.spend||0);
-        });
-      } catch(e) { console.warn('Meta platform fetch failed:', e.message); }
-
-      // Pull TikTok platform-claimed numbers if connected (separate connector)
-      let ttPlatformConversions = 0, ttPlatformRevenue = 0, ttSpend = 0;
       const tikTokId = Object.entries(CLIENTS.tiktok||{}).find(([k,v])=>v===state.client)?.[0];
-      if (tikTokId) {
-        try {
-          const ttRows = await fetchWindsor('tiktok', tikTokId,
-            ['spend', 'complete_payment', 'complete_payment_roas'],
-            state.period, {}, state.dateFrom, state.dateTo);
-          ttRows.forEach(r => {
-            const s = parseFloat(r.spend||0);
-            ttSpend += s;
-            ttPlatformConversions += parseFloat(r.complete_payment||0);
-            ttPlatformRevenue += s * parseFloat(r.complete_payment_roas||0);
-          });
-        } catch(e) { console.warn('TikTok platform fetch failed:', e.message); }
+
+      // All three sources are independent — fetch in parallel (previously sequential: 3x slower)
+      const [ga4Rows, metaAgg, ttAgg] = await Promise.all([
+        // GA4 — direct first, proxy fallback
+        (async () => {
+          try {
+            return await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
+          } catch(e) {
+            try {
+              return await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
+            } catch(e2) { console.warn('GA4 fetch failed:', e2.message); return null; }
+          }
+        })(),
+        // Meta platform-claimed totals
+        (async () => {
+          const agg = { conversions: 0, revenue: 0, spend: 0 };
+          try {
+            const rows = await fetchWindsor('facebook', state.client,
+              ['actions_purchase', 'action_values_offsite_conversion_fb_pixel_purchase', 'spend'],
+              state.period, {}, state.dateFrom, state.dateTo);
+            rows.forEach(r => {
+              agg.conversions += parseFloat(r.actions_purchase||0);
+              agg.revenue += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
+              agg.spend += parseFloat(r.spend||0);
+            });
+          } catch(e) { console.warn('Meta platform fetch failed:', e.message); }
+          return agg;
+        })(),
+        // TikTok platform-claimed totals (if connected)
+        (async () => {
+          const agg = { conversions: 0, revenue: 0, spend: 0 };
+          if (!tikTokId) return agg;
+          try {
+            const rows = await fetchWindsor('tiktok', tikTokId,
+              ['spend', 'complete_payment', 'complete_payment_roas'],
+              state.period, {}, state.dateFrom, state.dateTo);
+            rows.forEach(r => {
+              const s = parseFloat(r.spend||0);
+              agg.spend += s;
+              agg.conversions += parseFloat(r.complete_payment||0);
+              agg.revenue += s * parseFloat(r.complete_payment_roas||0);
+            });
+          } catch(e) { console.warn('TikTok platform fetch failed:', e.message); }
+          return agg;
+        })(),
+      ]);
+
+      if (ga4Rows === null) {
+        showError('Could not fetch GA4 attribution data. Check Windsor connection.');
+        return;
       }
 
       renderAttributionGap(ga4Rows, {
-        metaPlatformConversions, metaPlatformRevenue, metaSpend,
-        ttPlatformConversions, ttPlatformRevenue, ttSpend,
+        metaPlatformConversions: metaAgg.conversions, metaPlatformRevenue: metaAgg.revenue, metaSpend: metaAgg.spend,
+        ttPlatformConversions: ttAgg.conversions, ttPlatformRevenue: ttAgg.revenue, ttSpend: ttAgg.spend,
       });
       return;
     }
@@ -2751,10 +2913,18 @@ function filterDPA(query) {
   if (tbody) tbody.innerHTML = renderDPARows(filtered, window._dpaHasMerchant, window._dpaHasGA4, window._dpaHasGA4Connected);
 }
 function showLoading(msg) {
+  // Skeleton layout mirroring the dashboard structure — feels faster than a spinner
   document.getElementById('content').innerHTML = `
-    <div class="state-box">
-      <div class="spinner"></div>
-      <p>${msg || 'Loading data from Windsor.ai…'}</p>
+    <div style="padding:4px;">
+      <div class="skeleton-grid">
+        <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+      </div>
+      <div class="skeleton-block" style="height:220px;margin-bottom:16px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="skeleton-block" style="height:160px;"></div>
+        <div class="skeleton-block" style="height:160px;"></div>
+      </div>
+      <p class="skeleton-msg">${msg || 'Loading data from Windsor.ai…'}</p>
     </div>`;
 }
 
