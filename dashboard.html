@@ -2061,7 +2061,7 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
               ${displaySrc
                 ? `<img src="${displaySrc}" alt="" loading="lazy" referrerpolicy="no-referrer" data-proxy="${proxySrc}" onerror="if(this.dataset.proxy){this.src=this.dataset.proxy;this.dataset.proxy='';}else{this.style.display='none';this.nextElementSibling.style.display='flex';}">`
                 : ''}
-              <div class="creative-fallback"${displayImg?' style="display:none"':''}>
+              <div class="creative-fallback"${displaySrc?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
               ${statusBadge}
