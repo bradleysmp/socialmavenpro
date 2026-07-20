@@ -307,8 +307,10 @@
   .creative-card { background: var(--bg3); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); transition: border-color 0.15s; }
   .creative-card:hover { border-color: var(--border2); }
   .creative-thumb { position: relative; width: 100%; aspect-ratio: 1; background: var(--bg4); overflow: hidden; }
-  .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); }
+  .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.25s ease; }
+  .creative-thumb-clickable { cursor: zoom-in; }
+  .creative-card:hover .creative-thumb-clickable img { transform: scale(1.04); }
+  .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); background: linear-gradient(135deg, var(--bg4) 0%, rgba(255,107,43,0.06) 100%); letter-spacing: 1px; }
   .creative-badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 4px; color: #fff; font-family: 'Syne', sans-serif; }
   .creative-status-badge { position: absolute; top: 8px; left: 8px; font-size: 9px; font-weight: 600; padding: 3px 7px; border-radius: 3px; color: #fff; letter-spacing: 0.6px; backdrop-filter: blur(4px); }
   .creative-meta { padding: 10px 12px; }
@@ -1411,7 +1413,12 @@ async function loadData() {
     const creativeFields = isLeadGen
       ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status']
       : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status'];
-    const creativeImageFields = ['ad_id','image_url','thumbnail_url'];
+    // Windsor image fields are connector-specific:
+    // Meta exposes image_url + thumbnail_url; TikTok exposes video_thumbnail_url (video ads)
+    // and image_url (image ads) — requesting thumbnail_url on TikTok returns nothing.
+    const creativeImageFields = connector === 'tiktok'
+      ? ['ad_id','video_thumbnail_url']
+      : ['ad_id','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo),
@@ -1423,17 +1430,29 @@ async function loadData() {
     // Windsor takes time to generate signed thumbnail URLs; the direct fetch has no timeout limit.
     try {
       let imageRows;
-      if (connector === 'facebook') {
+      if (connector === 'facebook' || connector === 'tiktok') {
         imageRows = await fetchWindsorDirect(connector, accountId, creativeImageFields, state.period, state.dateFrom, state.dateTo, 0);
       } else {
         imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+      }
+      // TikTok image ads live in a separate field (image_url) which can hard-fail with
+      // "insufficient permissions" on some accounts — fetch it separately and tolerate failure
+      // so video thumbnails still render even when image_url errors.
+      if (connector === 'tiktok') {
+        try {
+          const tikImgRows = await fetchWindsorDirect(connector, accountId, ['ad_id','image_url'], state.period, state.dateFrom, state.dateTo, 0);
+          imageRows = (imageRows||[]).concat(tikImgRows||[]);
+        } catch(e) {
+          console.warn('TikTok image_url fetch failed (video thumbnails unaffected):', e.message);
+        }
       }
       const imgMap = {};
       (imageRows||[]).forEach(r => {
         if (!r.ad_id) return;
         if (!imgMap[r.ad_id]) imgMap[r.ad_id] = {};
+        const thumb = r.thumbnail_url || r.video_thumbnail_url;
         if (r.image_url && !imgMap[r.ad_id].image_url) imgMap[r.ad_id].image_url = r.image_url;
-        if (r.thumbnail_url && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = r.thumbnail_url;
+        if (thumb && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = thumb;
       });
       creativeRows.forEach(r => {
         const img = imgMap[r.ad_id];
@@ -2009,11 +2028,11 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           } else if (isArchived) {
             statusBadge = `<div class="creative-status-badge" style="background:rgba(40,42,46,0.92);color:#86878a;">OFF</div>`;
           }
-          const displayImg = imgProxy(c.thumbnail_url || c.image_url);
+          const displayImg = imgProxy(pickCreativeImage(c));
           return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
-            <div class="creative-thumb">
+            <div class="creative-thumb${displayImg ? ' creative-thumb-clickable' : ''}"${displayImg ? ` onclick="window.open('${displayImg}','_blank')" title="Open full size"` : ''}>
               ${displayImg
-                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';this.parentElement.classList.remove('creative-thumb-clickable');this.parentElement.onclick=null">`
                 : ''}
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
@@ -2173,6 +2192,18 @@ function imgProxy(url) {
   return `/.netlify/functions/imgproxy?url=${encodeURIComponent(url)}`;
 }
 
+// Meta returns a generic grey placeholder as image_url for many video/DPA ads —
+// the same asset across every account. Treat it as "no image" so we fall through
+// to thumbnail_url (or the initials fallback) instead of rendering a grey box.
+const META_PLACEHOLDER_IMG = 't39.2147-6/75341531_494485104475166';
+
+function pickCreativeImage(c) {
+  const fullImg = c.image_url && !c.image_url.includes(META_PLACEHOLDER_IMG) ? c.image_url : null;
+  // Prefer the full-size creative (Meta image_url is ~627px, thumbnail_url is often
+  // a 64px page avatar); fall back to the thumbnail rather than showing nothing.
+  return fullImg || c.thumbnail_url || null;
+}
+
 function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
   if (!rows || !rows.length) return [];
   const map = {};
@@ -2197,8 +2228,8 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
       map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
       map[id].orders += parseFloat(r.actions_purchase||0);
     }
-    if (!map[id].image_url && (r.image_url||r.video_cover_url)) map[id].image_url = r.image_url||r.video_cover_url;
-    if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
+    if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
+    if (!map[id].thumbnail_url && (r.thumbnail_url||r.video_thumbnail_url)) map[id].thumbnail_url = r.thumbnail_url||r.video_thumbnail_url;
     // Track status — Meta uses effective_status (ACTIVE/PAUSED/ARCHIVED/DELETED),
     // TikTok uses ad_status (ENABLE/DISABLE/DELETE/SUSPEND etc).
     // Prefer ACTIVE/ENABLE over other values across multiple rows for the same ad.
