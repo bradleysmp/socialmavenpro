@@ -14,9 +14,22 @@ exports.handler = async function(event) {
   const imageUrl = event.queryStringParameters?.url;
   if (!imageUrl) return { statusCode: 400, body: 'Missing url parameter' };
 
-  // Only allow Facebook CDN domains
-  const allowed = ['fbcdn.net', 'facebook.com', 'fbsbx.com'];
-  const isAllowed = allowed.some(domain => imageUrl.includes(domain));
+  // Only allow Meta and TikTok CDN domains, matched against the actual hostname
+  // (substring matching on the full URL is spoofable via query strings).
+  const allowed = [
+    'fbcdn.net', 'facebook.com', 'fbsbx.com', 'cdninstagram.com',
+    'tiktokcdn.com', 'tiktokcdn-us.com', 'tiktokcdn-eu.com',
+    'ibyteimg.com', 'byteimg.com', 'ttwstatic.com',
+  ];
+  let hostname;
+  try {
+    const parsed = new URL(imageUrl);
+    if (parsed.protocol !== 'https:') return { statusCode: 403, body: 'HTTPS only' };
+    hostname = parsed.hostname;
+  } catch {
+    return { statusCode: 400, body: 'Invalid url' };
+  }
+  const isAllowed = allowed.some(d => hostname === d || hostname.endsWith('.' + d));
   if (!isAllowed) return { statusCode: 403, body: 'Domain not allowed' };
 
   try {
