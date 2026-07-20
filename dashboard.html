@@ -2056,6 +2056,10 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
             ? `https://www.tiktok.com/@_/video/${c.item_id}`
             : (displaySrc ? displaySrc.replace(/'/g,'%27') : null);
           const clickTitle = (connector === 'tiktok' && c.item_id) ? 'View on TikTok' : 'Open full size';
+          // Catalogue ads have no single creative — badge them so the avatar or
+          // initials tile reads as intentional rather than a broken thumbnail.
+          const catalogueBadge = (connector === 'facebook' && isCatalogueAd(c))
+            ? `<div style="position:absolute;bottom:8px;left:8px;font-size:9px;font-weight:600;padding:3px 7px;border-radius:3px;color:#fff;letter-spacing:0.6px;background:rgba(40,42,46,0.85);backdrop-filter:blur(4px);">CATALOGUE</div>` : '';
           return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
             <div class="creative-thumb${clickUrl ? ' creative-thumb-clickable' : ''}"${clickUrl ? ` onclick="window.open('${clickUrl}','_blank')" title="${clickTitle}"` : ''}>
               ${displaySrc
@@ -2065,6 +2069,7 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
               ${statusBadge}
+              ${catalogueBadge}
               ${showBadge ? `<div class="creative-badge" style="background:${badgeColor}">${roas.toFixed(1)}x</div>` : ''}
             </div>
             <div class="creative-meta">
@@ -2224,11 +2229,18 @@ function imgProxy(url) {
 // to thumbnail_url (or the initials fallback) instead of rendering a grey box.
 const META_PLACEHOLDER_IMG = 't39.2147-6/75341531_494485104475166';
 
+function isMetaPlaceholder(url) { return !!(url && url.includes(META_PLACEHOLDER_IMG)); }
+
+// Catalogue/dynamic ads (DPA, Advantage+) assemble creative per-user at delivery,
+// so Meta's API returns the placeholder instead of an image — detectable signal.
+function isCatalogueAd(c) { return isMetaPlaceholder(c.image_url) || isMetaPlaceholder(c.thumbnail_url); }
+
 function pickCreativeImage(c) {
-  const fullImg = c.image_url && !c.image_url.includes(META_PLACEHOLDER_IMG) ? c.image_url : null;
+  const fullImg = !isMetaPlaceholder(c.image_url) ? c.image_url : null;
+  const thumb = !isMetaPlaceholder(c.thumbnail_url) ? c.thumbnail_url : null;
   // Prefer the full-size creative (Meta image_url is ~627px, thumbnail_url is often
   // a 64px page avatar); fall back to the thumbnail rather than showing nothing.
-  return fullImg || c.thumbnail_url || null;
+  return fullImg || thumb || null;
 }
 
 function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
