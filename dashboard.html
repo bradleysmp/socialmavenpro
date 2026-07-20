@@ -1416,8 +1416,10 @@ async function loadData() {
     // Windsor image fields are connector-specific:
     // Meta exposes image_url + thumbnail_url; TikTok exposes video_thumbnail_url (video ads)
     // and image_url (image ads) — requesting thumbnail_url on TikTok returns nothing.
+    // item_id is the underlying TikTok post ID, used to resolve Spark Ad thumbnails
+    // (Spark Ads return null video_thumbnail_url because the video is the creator's).
     const creativeImageFields = connector === 'tiktok'
-      ? ['ad_id','video_thumbnail_url']
+      ? ['ad_id','video_thumbnail_url','item_id']
       : ['ad_id','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
@@ -1453,12 +1455,14 @@ async function loadData() {
         const thumb = r.thumbnail_url || r.video_thumbnail_url;
         if (r.image_url && !imgMap[r.ad_id].image_url) imgMap[r.ad_id].image_url = r.image_url;
         if (thumb && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = thumb;
+        if (r.item_id && !imgMap[r.ad_id].item_id) imgMap[r.ad_id].item_id = r.item_id;
       });
       creativeRows.forEach(r => {
         const img = imgMap[r.ad_id];
         if (img) {
           if (img.image_url) r.image_url = img.image_url;
           if (img.thumbnail_url) r.thumbnail_url = img.thumbnail_url;
+          if (img.item_id) r.item_id = img.item_id;
         }
       });
     } catch(e) {
@@ -2028,11 +2032,20 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           } else if (isArchived) {
             statusBadge = `<div class="creative-status-badge" style="background:rgba(40,42,46,0.92);color:#86878a;">OFF</div>`;
           }
-          const displayImg = imgProxy(pickCreativeImage(c));
+          // Spark Ads (creator posts) return no thumbnail via the Ads API — resolve one
+          // from the underlying TikTok post through the oEmbed serverless function.
+          const directImg = pickCreativeImage(c);
+          const sparkThumb = (!directImg && connector === 'tiktok' && c.item_id)
+            ? `/.netlify/functions/tiktok-thumb?item_id=${c.item_id}` : null;
+          const displayImg = sparkThumb || imgProxy(directImg);
+          // TikTok cards click through to the live post; everything else enlarges the image.
+          const clickUrl = (connector === 'tiktok' && c.item_id)
+            ? `https://www.tiktok.com/@_/video/${c.item_id}` : displayImg;
+          const clickTitle = (connector === 'tiktok' && c.item_id) ? 'View on TikTok' : 'Open full size';
           return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
-            <div class="creative-thumb${displayImg ? ' creative-thumb-clickable' : ''}"${displayImg ? ` onclick="window.open('${displayImg}','_blank')" title="Open full size"` : ''}>
+            <div class="creative-thumb${clickUrl ? ' creative-thumb-clickable' : ''}"${clickUrl ? ` onclick="window.open('${clickUrl}','_blank')" title="${clickTitle}"` : ''}>
               ${displayImg
-                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';this.parentElement.classList.remove('creative-thumb-clickable');this.parentElement.onclick=null">`
+                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
                 : ''}
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
@@ -2212,7 +2225,7 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
     if (!map[id]) map[id] = {
       id, name: r.ad_name || 'Unknown',
       spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0,
-      image_url: null, thumbnail_url: null, status: null
+      image_url: null, thumbnail_url: null, item_id: null, status: null
     };
     const rowSpend = parseFloat(r.spend||0);
     map[id].spend += rowSpend;
@@ -2230,6 +2243,7 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
     }
     if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
     if (!map[id].thumbnail_url && (r.thumbnail_url||r.video_thumbnail_url)) map[id].thumbnail_url = r.thumbnail_url||r.video_thumbnail_url;
+    if (!map[id].item_id && r.item_id) map[id].item_id = r.item_id;
     // Track status — Meta uses effective_status (ACTIVE/PAUSED/ARCHIVED/DELETED),
     // TikTok uses ad_status (ENABLE/DISABLE/DELETE/SUSPEND etc).
     // Prefer ACTIVE/ENABLE over other values across multiple rows for the same ad.
