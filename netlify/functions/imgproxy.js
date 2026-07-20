@@ -34,7 +34,7 @@ exports.handler = async function(event) {
 
   try {
     const response = await fetch(imageUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,*/*;q=0.8' }
     });
 
     if (!response.ok) {
