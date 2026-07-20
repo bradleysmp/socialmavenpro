@@ -1430,19 +1430,27 @@ async function loadData() {
 
     // Optionally fetch creative images — use direct browser fetch to bypass Netlify proxy timeout.
     // Windsor takes time to generate signed thumbnail URLs; the direct fetch has no timeout limit.
-    try {
-      let imageRows;
-      if (connector === 'facebook' || connector === 'tiktok') {
-        imageRows = await fetchWindsorDirect(connector, accountId, creativeImageFields, state.period, state.dateFrom, state.dateTo, 0);
-      } else {
-        imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
+    // Fetch creative images with two independent paths: direct browser fetch first
+    // (no Netlify timeout limit — Windsor is slow generating signed URLs), then the
+    // Netlify proxy as fallback if the direct call fails (e.g. CORS policy change).
+    // Previously a single direct-fetch failure silently blanked every thumbnail.
+    async function fetchCreativeImages(fields) {
+      try {
+        return await fetchWindsorDirect(connector, accountId, fields, state.period, state.dateFrom, state.dateTo, 0);
+      } catch(e) {
+        console.warn('Direct image fetch failed, retrying via Netlify proxy:', e.message);
+        return await fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo);
       }
+    }
+
+    try {
+      let imageRows = await fetchCreativeImages(creativeImageFields);
       // TikTok image ads live in a separate field (image_url) which can hard-fail with
       // "insufficient permissions" on some accounts — fetch it separately and tolerate failure
       // so video thumbnails still render even when image_url errors.
       if (connector === 'tiktok') {
         try {
-          const tikImgRows = await fetchWindsorDirect(connector, accountId, ['ad_id','image_url'], state.period, state.dateFrom, state.dateTo, 0);
+          const tikImgRows = await fetchCreativeImages(['ad_id','image_url']);
           imageRows = (imageRows||[]).concat(tikImgRows||[]);
         } catch(e) {
           console.warn('TikTok image_url fetch failed (video thumbnails unaffected):', e.message);
@@ -2037,15 +2045,21 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           const directImg = pickCreativeImage(c);
           const sparkThumb = (!directImg && connector === 'tiktok' && c.item_id)
             ? `/.netlify/functions/tiktok-thumb?item_id=${c.item_id}` : null;
-          const displayImg = sparkThumb || imgProxy(directImg);
+          // Load straight from the platform CDN (referrerpolicy avoids referer blocks;
+          // browsers aren't IP-blocked the way serverless egress can be). If the CDN
+          // rejects the request, onerror retries once through the imgproxy function,
+          // then falls back to the initials tile.
+          const displaySrc = sparkThumb || (directImg ? directImg.replace(/"/g,'%22') : null);
+          const proxySrc = (!sparkThumb && directImg) ? imgProxy(directImg) : '';
           // TikTok cards click through to the live post; everything else enlarges the image.
           const clickUrl = (connector === 'tiktok' && c.item_id)
-            ? `https://www.tiktok.com/@_/video/${c.item_id}` : displayImg;
+            ? `https://www.tiktok.com/@_/video/${c.item_id}`
+            : (displaySrc ? displaySrc.replace(/'/g,'%27') : null);
           const clickTitle = (connector === 'tiktok' && c.item_id) ? 'View on TikTok' : 'Open full size';
           return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
             <div class="creative-thumb${clickUrl ? ' creative-thumb-clickable' : ''}"${clickUrl ? ` onclick="window.open('${clickUrl}','_blank')" title="${clickTitle}"` : ''}>
-              ${displayImg
-                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+              ${displaySrc
+                ? `<img src="${displaySrc}" alt="" loading="lazy" referrerpolicy="no-referrer" data-proxy="${proxySrc}" onerror="if(this.dataset.proxy){this.src=this.dataset.proxy;this.dataset.proxy='';}else{this.style.display='none';this.nextElementSibling.style.display='flex';}">`
                 : ''}
               <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
