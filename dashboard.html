@@ -2937,12 +2937,6 @@ function renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows) {
 
   const top10 = products.slice(0, 10);
 
-  window._brandProducts = products;
-  window._brandCfg = cfg;
-
-  const sorts = [['score','Score'],['views','Views'],['ctv','Add-to-cart %'],['purchases','Units sold'],
-                 ['revenue','Revenue'],['metaSpend','Meta spend'],['ctr','Meta CTR']];
-
   const recPill = (p) => `<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;
     background:${p.recColor === 'var(--text3)' ? 'var(--bg4)' : 'rgba(255,255,255,0.06)'};color:${p.recColor};white-space:nowrap;">${p.rec}</span>`;
 
@@ -3052,80 +3046,10 @@ function renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows) {
       <div style="font-size:12px;color:var(--amber);padding:10px 14px;background:var(--amber-bg);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:18px;">
         No ads matching "${cfg.adToken}" ran in this period — the brand is only being carried inside catalogue campaigns.
       </div>`}
-
-      <!-- Full product table -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);font-weight:600;">All ${cfg.label} products with activity</div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <div style="font-size:11px;color:var(--text3);">Sort</div>
-          <select id="brand-sort" onchange="sortBrand(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;outline:none;cursor:pointer;">
-            ${sorts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
-          </select>
-          <input id="brand-search" type="text" placeholder="Search products…" oninput="filterBrand(this.value)"
-            style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 10px;outline:none;width:180px;" />
-        </div>
-      </div>
-    </div>
-
-    <div style="overflow-x:auto;padding:0 24px 24px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr style="background:var(--bg3);">
-          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:210px;">Product</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;">Score</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Views</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC&nbsp;%</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Units</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Revenue</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;spend</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;impr.</th>
-          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;CTR</th>
-          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:180px;">Recommendation</th>
-        </tr></thead>
-        <tbody id="brand-tbody">
-          ${renderBrandRows(products)}
-        </tbody>
-      </table>
     </div>
   </div>`;
 
   document.getElementById('content').innerHTML = html;
-}
-
-function renderBrandRows(products) {
-  const money = (n) => `£${(parseFloat(n||0)).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const money0 = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
-  const num = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
-  if (!products.length) return `<tr><td colspan="11" style="padding:16px;text-align:center;color:var(--text3);font-size:12px;">No products match</td></tr>`;
-  return products.map(p => `<tr style="border-bottom:1px solid var(--border);">
-    <td style="padding:9px 12px;font-size:12px;">${truncate(p.name,52)}</td>
-    <td style="padding:9px 8px;text-align:center;"><span style="display:inline-block;min-width:30px;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--bg4);color:${p.score>=65?'var(--green)':(p.score>=45?'var(--amber)':'var(--text2)')}">${p.score}</span></td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.views)}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.atc)}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctv>=15?'var(--green)':'var(--text)'}">${p.ctv.toFixed(1)}%</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;font-weight:${p.purchases>0?'600':'400'};color:${p.purchases>0?'var(--green)':'var(--text3)'}">${num(p.purchases)}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;">${p.revenue>0?money0(p.revenue):'—'}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.metaSpend<1?'var(--amber)':'var(--text)'}">${money(p.metaSpend)}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;color:var(--text2)">${num(p.metaImpr)}</td>
-    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctr>=3?'var(--green)':'var(--text2)'}">${p.metaImpr>0?p.ctr.toFixed(2)+'%':'—'}</td>
-    <td style="padding:9px 12px;font-size:11px;color:var(--text2);line-height:1.4;">
-      <span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.06);color:${p.recColor};white-space:nowrap;">${p.rec}</span>
-    </td>
-  </tr>`).join('');
-}
-
-function sortBrand(field) {
-  if (!window._brandProducts) return;
-  window._brandProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
-  filterBrand(document.getElementById('brand-search')?.value || '');
-}
-
-function filterBrand(query) {
-  if (!window._brandProducts) return;
-  const q = (query||'').toLowerCase().trim();
-  const filtered = q ? window._brandProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.vid||'').includes(q)) : window._brandProducts;
-  const tbody = document.getElementById('brand-tbody');
-  if (tbody) tbody.innerHTML = renderBrandRows(filtered);
 }
 
 // ─── ATTRIBUTION GAP ANALYSIS ─────────────────────────────────────
