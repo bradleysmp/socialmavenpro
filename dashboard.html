@@ -470,6 +470,10 @@
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
       Products
     </button>
+    <button class="ptab" onclick="setPlatform('brand',this)" id="tab-brand" style="display:none">
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#B08D57"/><path d="M4.2 11.5V4.5h1.4v5.7h3v1.3z" fill="white"/><path d="M9.6 11.5V4.5H11v7z" fill="white" opacity="0.75"/><circle cx="12.4" cy="5.4" r="0.9" fill="white"/></svg>
+      <span id="tab-brand-label">Brand</span>
+    </button>
     <button class="ptab" onclick="setPlatform('journey',this)" id="tab-journey" style="display:none">
       <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#8B7CD8"/><circle cx="4" cy="8" r="1.5" fill="white"/><circle cx="12" cy="8" r="1.5" fill="white"/><path d="M5.5 8h5" stroke="white" stroke-width="1.3" stroke-linecap="round"/><path d="M8 5v6" stroke="white" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/></svg>
       Journey
@@ -541,6 +545,16 @@ const CLIENTS = {
     '7231226751496503297': '783788426913932', // Babble & Goose
     '7533015903315984400': '7533015903315984400', // Babble & Goose (US) — TikTok-only, self-mapped
   },
+};
+
+// ─── BRAND TABS ────────────────────────────────────────────
+// Per-client single-brand view, keyed by Meta ad account id.
+//   brand   — must match GA4 item_brand (compared case-insensitively)
+//   label   — tab caption
+//   adToken — substring identifying brand-specific ads by ad_name
+// Add an entry here to switch the tab on for another client/brand.
+const BRAND_TABS = {
+  '468452590544702': { brand: 'Liang & Eimil', label: 'Liang & Eimil', adToken: 'L&E' },
 };
 
 // ─── CLIENT SETTINGS ───────────────────────────────────────
@@ -809,6 +823,13 @@ function selectClient(id) {
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
   document.getElementById('tab-journey').style.display = hasGA4 ? '' : 'none';
+  // Brand tab — needs both a brand config and a GA4 property to identify the brand
+  const brandCfg = BRAND_TABS[id];
+  const brandTab = document.getElementById('tab-brand');
+  if (brandTab) {
+    brandTab.style.display = (brandCfg && hasGA4) ? '' : 'none';
+    if (brandCfg) document.getElementById('tab-brand-label').textContent = brandCfg.label;
+  }
   const hasPinterest = Object.values(CLIENTS.pinterest||{}).includes(id);
   const pinTab = document.getElementById('tab-pinterest');
   if (pinTab) pinTab.style.display = hasPinterest ? '' : 'none';
@@ -832,7 +853,7 @@ function selectClient(id) {
 
   // Restore a specific tab from the URL hash (deep-link support)
   if (state._restoreTab) {
-    const tabIds = { facebook:'tab-meta', tiktok:'tab-tiktok', dpa:'tab-dpa', journey:'tab-journey', pinterest:'tab-pinterest' };
+    const tabIds = { facebook:'tab-meta', tiktok:'tab-tiktok', dpa:'tab-dpa', journey:'tab-journey', pinterest:'tab-pinterest', brand:'tab-brand' };
     const targetTabId = tabIds[state._restoreTab];
     const targetEl = targetTabId ? document.getElementById(targetTabId) : null;
     const isAvailable = targetEl && targetEl.style.display !== 'none';
@@ -1164,6 +1185,59 @@ async function loadData() {
     const connector = state.platform;
     let accountId = state.client;
     let organicRows = [];
+
+    // ── SINGLE-BRAND VIEW (Meta only) ──
+    // Meta has no brand dimension, so the brand is identified in GA4 (item_brand)
+    // and joined back to Meta on the Shopify variant id that both sides carry.
+    if (connector === 'brand') {
+      const cfg = BRAND_TABS[state.client];
+      if (!cfg) { showError('No brand configured for this client.'); return; }
+      const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
+      if (!ga4Id) { showError('No GA4 account linked for this client — brand cannot be identified.'); return; }
+
+      showLoading(`Fetching ${cfg.label} data…`);
+
+      const ga4Fields  = ['item_brand','item_id','item_name','items_viewed','items_added_to_cart','items_purchased','item_revenue'];
+      const prodFields = ['product_id','account_id','spend','impressions','clicks'];
+      const adFields   = ['ad_name','campaign','spend','impressions','clicks','actions_purchase','action_values_purchase'];
+
+      const [ga4Rows, metaProductRows, metaAdRows] = await Promise.all([
+        // GA4 item-level — no spend field, so pass -1 to suppress the spend filter
+        (async () => {
+          try {
+            return await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
+          } catch(e) {
+            console.warn('GA4 direct fetch failed, trying proxy:', e.message);
+            try { return await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo); }
+            catch(e2) { console.warn('GA4 proxy fetch also failed:', e2.message); return []; }
+          }
+        })(),
+        // Meta product-level — catalogue delivery per variant
+        (async () => {
+          try {
+            const rows = await fetchWindsorDirect('facebook', accountId, prodFields, state.period, state.dateFrom, state.dateTo, 0);
+            return rows.filter(r => !r.account_id || String(r.account_id) === String(accountId));
+          } catch(e) {
+            console.warn('Meta product direct fetch failed, using proxy:', e.message);
+            try { return await fetchWindsor('facebook', accountId, prodFields, state.period, { min_spend: 0 }, state.dateFrom, state.dateTo); }
+            catch(e2) { console.warn('Meta product proxy fetch failed:', e2.message); return []; }
+          }
+        })(),
+        // Meta ad-level — brand-specific creative, matched on ad_name
+        (async () => {
+          try {
+            return await fetchWindsorDirect('facebook', accountId, adFields, state.period, state.dateFrom, state.dateTo, 0);
+          } catch(e) {
+            console.warn('Meta ad direct fetch failed, using proxy:', e.message);
+            try { return await fetchWindsor('facebook', accountId, adFields, state.period, {}, state.dateFrom, state.dateTo); }
+            catch(e2) { console.warn('Meta ad proxy fetch failed:', e2.message); return []; }
+          }
+        })(),
+      ]);
+
+      renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows);
+      return;
+    }
 
     // ── UNIFIED PRODUCT SCORECARD ──
     if (connector === 'dpa') {
@@ -2686,6 +2760,372 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
   </div>`;
 
   document.getElementById('content').innerHTML = html;
+}
+
+// ─── SINGLE-BRAND VIEW (Meta only) ────────────────────────────────
+// Meta exposes no brand dimension. The brand is resolved in GA4 via item_brand,
+// then joined back to Meta on the Shopify variant id that appears in both:
+//   GA4  item_id     → shopify_ZZ_<productId>_<variantId>
+//   Meta product_id  → "<variantId>, <product title>"
+// Everything paid on this tab is Meta. GA4 is used only to identify the brand
+// and to supply on-site demand signals Meta cannot see.
+
+function brandVariantFromGA4(itemId) {
+  const parts = String(itemId || '').split('_');
+  return parts.length ? parts[parts.length - 1] : '';
+}
+function brandVariantFromMeta(productId) {
+  return String(productId || '').split(',')[0].trim();
+}
+
+function buildBrandProducts(brandName, ga4Rows, metaProductRows) {
+  const target = String(brandName || '').toLowerCase();
+
+  // Meta side — aggregate delivery by variant id
+  const metaMap = {};
+  (metaProductRows || []).forEach(r => {
+    const vid = brandVariantFromMeta(r.product_id);
+    // Numeric-only guard drops catalogue-set rows, which use a different id space
+    if (!vid || !/^\d+$/.test(vid)) return;
+    if (!metaMap[vid]) metaMap[vid] = { spend:0, impressions:0, clicks:0 };
+    metaMap[vid].spend       += parseFloat(r.spend || 0);
+    metaMap[vid].impressions += parseFloat(r.impressions || 0);
+    metaMap[vid].clicks      += parseFloat(r.clicks || 0);
+  });
+
+  // GA4 side — brand rows only, aggregated by variant id. GA4 emits the same
+  // variant under several titles when a product name has been edited, so these
+  // are collapsed and the duplication surfaced as a data-quality flag.
+  const ga4Map = {};
+  (ga4Rows || []).forEach(r => {
+    if (String(r.item_brand || '').toLowerCase() !== target) return;
+    const vid = brandVariantFromGA4(r.item_id);
+    if (!vid) return;
+    if (!ga4Map[vid]) ga4Map[vid] = { vid, name: r.item_name || vid, views:0, atc:0, purchases:0, revenue:0, aliases:0 };
+    const g = ga4Map[vid];
+    g.views     += parseFloat(r.items_viewed || 0);
+    g.atc       += parseFloat(r.items_added_to_cart || 0);
+    g.purchases += parseFloat(r.items_purchased || 0);
+    g.revenue   += parseFloat(r.item_revenue || 0);
+    g.aliases   += 1;
+    if ((r.item_name || '').length > g.name.length) g.name = r.item_name;
+  });
+
+  return Object.values(ga4Map).map(g => {
+    const m = metaMap[g.vid] || { spend:0, impressions:0, clicks:0 };
+    const ctr = m.impressions > 0 ? m.clicks / m.impressions * 100 : 0;
+    const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
+    // GA4 counts add-to-cart and purchase quantity, which can exceed units
+    // viewed on multi-quantity orders — capped so the rates stay readable
+    const ctv = g.views > 0 ? Math.min(100, g.atc / g.views * 100) : 0;
+    const ptv = g.views > 0 ? Math.min(100, g.purchases / g.views * 100) : 0;
+    const aov = g.purchases > 0 ? g.revenue / g.purchases : 0;
+
+    // Score — on-site demand weighted against how little Meta spend sits behind
+    // it. A high score means proven or strongly signalled demand with headroom.
+    let score = 0;
+    if (g.views >= 50)      score += 25;
+    else if (g.views >= 30) score += 20;
+    else if (g.views >= 20) score += 15;
+    else if (g.views >= 10) score += 10;
+    else if (g.views >= 5)  score += 5;
+
+    if (ctv >= 25)      score += 25;
+    else if (ctv >= 15) score += 20;
+    else if (ctv >= 8)  score += 14;
+    else if (ctv >= 3)  score += 8;
+    else if (ctv > 0)   score += 4;
+
+    if (g.purchases >= 4)      score += 30;
+    else if (g.purchases >= 2) score += 22;
+    else if (g.purchases >= 1) score += 14;
+
+    if (m.impressions >= 20) {
+      if (ctr >= 4)      score += 10;
+      else if (ctr >= 2) score += 6;
+      else if (ctr >= 1) score += 3;
+    }
+
+    if (m.spend < 1)       score += 10;
+    else if (m.spend < 5)  score += 7;
+    else if (m.spend < 20) score += 4;
+
+    score = Math.min(100, Math.round(score));
+
+    let rec, recColor, recReason;
+    if (g.purchases >= 2 && m.spend < 20) {
+      rec = 'Scale now'; recColor = 'var(--green)';
+      recReason = `${g.purchases} sales on £${m.spend.toFixed(2)} Meta spend — proven converter with no budget behind it`;
+    } else if (g.purchases >= 1 && m.spend < 10) {
+      rec = 'Scale now'; recColor = 'var(--green)';
+      recReason = `Converts at ${ptv.toFixed(1)}% view-to-purchase on £${m.spend.toFixed(2)} spend — push in DPA`;
+    } else if (ctv >= 15 && g.purchases === 0) {
+      rec = 'Push — high intent'; recColor = 'var(--amber)';
+      recReason = `${ctv.toFixed(0)}% add-to-cart but no sales — strong demand, likely price, stock or lead-time friction`;
+    } else if (g.views >= 30 && ctv < 3) {
+      rec = 'Review PDP'; recColor = 'var(--red)';
+      recReason = `${Math.round(g.views)} views but only ${ctv.toFixed(1)}% add to cart — imagery, price or copy is losing them`;
+    } else if (g.views >= 20 && ctv >= 3 && m.spend < 10) {
+      rec = 'Test budget'; recColor = 'var(--amber)';
+      recReason = `${Math.round(g.views)} views at ${ctv.toFixed(0)}% add-to-cart on £${m.spend.toFixed(2)} spend — enough demand to justify a test`;
+    } else if (m.spend < 1 && g.views >= 20) {
+      rec = 'Untapped'; recColor = 'var(--text2)';
+      recReason = `${Math.round(g.views)} views and effectively no Meta spend — worth a test allocation`;
+    } else {
+      rec = 'Monitor'; recColor = 'var(--text3)';
+      recReason = 'Not enough signal to act on yet';
+    }
+    if (g.aliases > 1) recReason = `⚠ ${g.aliases} catalogue titles for this variant · ${recReason}`;
+
+    return { vid:g.vid, name:g.name, views:g.views, atc:g.atc, purchases:g.purchases,
+             revenue:g.revenue, aov, ctv, ptv, metaSpend:m.spend, metaImpr:m.impressions,
+             metaClicks:m.clicks, ctr, cpc, score, rec, recColor, recReason, aliases:g.aliases };
+  }).sort((a,b) => b.score - a.score);
+}
+
+function renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows) {
+  const money = (n) => `£${(parseFloat(n||0)).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const money0 = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
+  const num   = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
+
+  const products = buildBrandProducts(cfg.brand, ga4Rows, metaProductRows);
+
+  if (!products.length) {
+    showError(`No ${cfg.label} products found in GA4 for this period. Check that item_brand is populated in the Shopify feed.`);
+    return;
+  }
+
+  // ── Brand-specific Meta creative, matched on ad_name
+  const token = String(cfg.adToken || '').toLowerCase();
+  const adMap = {};
+  (metaAdRows || []).forEach(r => {
+    const name = r.ad_name || '';
+    if (!token || !name.toLowerCase().includes(token)) return;
+    if (!adMap[name]) adMap[name] = { name, campaign:r.campaign||'', spend:0, impressions:0, clicks:0, purchases:0, revenue:0 };
+    const a = adMap[name];
+    a.spend       += parseFloat(r.spend || 0);
+    a.impressions += parseFloat(r.impressions || 0);
+    a.clicks      += parseFloat(r.clicks || 0);
+    a.purchases   += parseFloat(r.actions_purchase || 0);
+    a.revenue     += parseFloat(r.action_values_purchase || 0);
+  });
+  const ads = Object.values(adMap).sort((a,b) => b.spend - a.spend);
+
+  const adTot = ads.reduce((t,a) => ({
+    spend:t.spend+a.spend, impressions:t.impressions+a.impressions, clicks:t.clicks+a.clicks,
+    purchases:t.purchases+a.purchases, revenue:t.revenue+a.revenue
+  }), {spend:0,impressions:0,clicks:0,purchases:0,revenue:0});
+  const adCtr  = adTot.impressions > 0 ? adTot.clicks/adTot.impressions*100 : 0;
+  const adCpc  = adTot.clicks > 0 ? adTot.spend/adTot.clicks : 0;
+  const adRoas = adTot.spend > 0 ? adTot.revenue/adTot.spend : 0;
+
+  // ── Catalogue-side totals for this brand
+  const catSpend  = products.reduce((t,p) => t+p.metaSpend, 0);
+  const catImpr   = products.reduce((t,p) => t+p.metaImpr, 0);
+  const catClicks = products.reduce((t,p) => t+p.metaClicks, 0);
+  const totalMetaSpend = adTot.spend + catSpend;
+
+  // ── Brand demand (GA4, all sources — context for the Meta numbers above)
+  const views     = products.reduce((t,p) => t+p.views, 0);
+  const atc       = products.reduce((t,p) => t+p.atc, 0);
+  const units     = products.reduce((t,p) => t+p.purchases, 0);
+  const revenue   = products.reduce((t,p) => t+p.revenue, 0);
+
+  const scaleNow  = products.filter(p => p.rec === 'Scale now').length;
+  const highIntent= products.filter(p => p.rec === 'Push — high intent').length;
+  const noSpend   = products.filter(p => p.metaSpend < 1).length;
+
+  const top10 = products.slice(0, 10);
+
+  window._brandProducts = products;
+  window._brandCfg = cfg;
+
+  const sorts = [['score','Score'],['views','Views'],['ctv','Add-to-cart %'],['purchases','Units sold'],
+                 ['revenue','Revenue'],['metaSpend','Meta spend'],['ctr','Meta CTR']];
+
+  const recPill = (p) => `<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;
+    background:${p.recColor === 'var(--text3)' ? 'var(--bg4)' : 'rgba(255,255,255,0.06)'};color:${p.recColor};white-space:nowrap;">${p.rec}</span>`;
+
+  const html = `<div class="fade-in" style="padding:0">
+    <div style="padding:20px 24px 0;">
+
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">${cfg.label} — Meta performance</div>
+          <div style="font-size:12px;color:var(--text3);">
+            Brand isolated via GA4 <code style="color:var(--text2)">item_brand</code>, joined to Meta on Shopify variant ID
+            <span style="margin-left:6px;padding:2px 7px;border-radius:3px;background:rgba(24,119,242,0.15);color:var(--meta);font-size:10px;font-weight:500;">Meta only</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meta paid activity -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">Meta paid activity — ${cfg.label}</div>
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        ${metricCard('Total Meta spend', money(totalMetaSpend), `${money(adTot.spend)} creative · ${money(catSpend)} catalogue`, 'var(--orange)')}
+        ${metricCard('Brand creative spend', money(adTot.spend), `${ads.length} ad${ads.length===1?'':'s'} matching "${cfg.adToken}"`, '')}
+        ${metricCard('Impressions', num(adTot.impressions + catImpr), `${num(adTot.clicks + catClicks)} clicks`, '')}
+        ${metricCard('Creative CTR', adCtr.toFixed(2)+'%', `${money(adCpc)} CPC`, adCtr>=2?'var(--green)':'')}
+        ${metricCard('Meta-reported ROAS', adTot.spend>0 ? adRoas.toFixed(2)+'x' : '—', `${num(adTot.purchases)} purchases · ${money0(adTot.revenue)}`, adRoas>=2?'var(--green)':(adTot.spend>0?'var(--amber)':'var(--text3)'))}
+      </div>
+
+      <!-- On-site demand -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">On-site demand — ${cfg.label} (all sources, GA4)</div>
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        ${metricCard('Product views', num(views), `${products.length} SKUs with activity`, '')}
+        ${metricCard('Add to cart', num(atc), views>0 ? (atc/views*100).toFixed(1)+'% of views' : '—', '')}
+        ${metricCard('Units sold', num(units), units>0 ? money0(revenue/units)+' per unit' : 'no sales in period', units>0?'var(--green)':'var(--text3)')}
+        ${metricCard('Brand revenue', money0(revenue), 'retail, excl. tax & shipping', 'var(--green)')}
+        ${metricCard('SKUs with no Meta spend', noSpend.toString(), `of ${products.length} with demand`, noSpend>0?'var(--amber)':'var(--text3)')}
+      </div>
+
+      <!-- Top 10 scalable -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--orange);font-weight:600;">Top 10 scalable products</div>
+        <div style="font-size:11px;color:var(--text3);">${scaleNow} ready to scale · ${highIntent} high intent, no sales yet</div>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:6px;">
+        <table style="width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
+          <thead><tr style="background:var(--bg3);">
+            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;width:28px;">#</th>
+            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:210px;">Product</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;">Score</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Views</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC&nbsp;%</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Units</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;spend</th>
+            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:230px;">Why</th>
+          </tr></thead>
+          <tbody>
+            ${top10.map((p,i) => `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:9px 10px;font-size:11px;color:var(--text3);">${i+1}</td>
+              <td style="padding:9px 10px;font-size:12px;color:var(--text);">${truncate(p.name, 54)}</td>
+              <td style="padding:9px 8px;text-align:center;"><span style="display:inline-block;min-width:30px;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--bg4);color:${p.score>=65?'var(--green)':(p.score>=45?'var(--amber)':'var(--text2)')}">${p.score}</span></td>
+              <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.views)}</td>
+              <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctv>=15?'var(--green)':'var(--text)'}">${p.ctv.toFixed(1)}%</td>
+              <td style="padding:9px 8px;text-align:center;font-size:12px;font-weight:${p.purchases>0?'600':'400'};color:${p.purchases>0?'var(--green)':'var(--text3)'}">${num(p.purchases)}</td>
+              <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.metaSpend<1?'var(--amber)':'var(--text)'}">${money(p.metaSpend)}</td>
+              <td style="padding:9px 10px;font-size:11px;color:var(--text2);line-height:1.4;">${recPill(p)} ${p.recReason}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:11px;color:var(--text3);padding:8px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:18px;">
+        <strong style="color:var(--text)">Score</strong> on-site demand (views + add-to-cart rate) + proven conversion + Meta creative efficiency, weighted up where Meta spend is low.
+        A high score means demand that Meta is not yet funding. <strong style="color:var(--text)">ATC %</strong> add to cart ÷ views, capped at 100%.
+      </div>
+
+      ${ads.length ? `
+      <!-- Brand creative -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">Brand creative — ads matching "${cfg.adToken}"</div>
+      <div style="overflow-x:auto;margin-bottom:18px;">
+        <table style="width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
+          <thead><tr style="background:var(--bg3);">
+            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:220px;">Ad</th>
+            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;">Campaign</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Spend</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Impr.</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Clicks</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">CTR</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">CPC</th>
+            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ROAS</th>
+          </tr></thead>
+          <tbody>
+            ${ads.map(a => {
+              const c = a.impressions>0 ? a.clicks/a.impressions*100 : 0;
+              const cp = a.clicks>0 ? a.spend/a.clicks : 0;
+              const r = a.spend>0 ? a.revenue/a.spend : 0;
+              return `<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:9px 10px;font-size:12px;">${truncate(a.name,48)}</td>
+                <td style="padding:9px 10px;font-size:11px;color:var(--text3);">${truncate(a.campaign,22)}</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;">${money(a.spend)}</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(a.impressions)}</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(a.clicks)}</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;color:${c>=3?'var(--green)':'var(--text)'}">${c.toFixed(2)}%</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;">${money(cp)}</td>
+                <td style="padding:9px 8px;text-align:center;font-size:12px;color:${r>=2?'var(--green)':'var(--text3)'}">${a.spend>0?r.toFixed(2)+'x':'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : `
+      <div style="font-size:12px;color:var(--amber);padding:10px 14px;background:var(--amber-bg);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:18px;">
+        No ads matching "${cfg.adToken}" ran in this period — the brand is only being carried inside catalogue campaigns.
+      </div>`}
+
+      <!-- Full product table -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);font-weight:600;">All ${cfg.label} products with activity</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="font-size:11px;color:var(--text3);">Sort</div>
+          <select id="brand-sort" onchange="sortBrand(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;outline:none;cursor:pointer;">
+            ${sorts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+          </select>
+          <input id="brand-search" type="text" placeholder="Search products…" oninput="filterBrand(this.value)"
+            style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 10px;outline:none;width:180px;" />
+        </div>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;padding:0 24px 24px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:var(--bg3);">
+          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:210px;">Product</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;">Score</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Views</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC&nbsp;%</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Units</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Revenue</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;spend</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;impr.</th>
+          <th style="padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;CTR</th>
+          <th style="text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:180px;">Recommendation</th>
+        </tr></thead>
+        <tbody id="brand-tbody">
+          ${renderBrandRows(products)}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderBrandRows(products) {
+  const money = (n) => `£${(parseFloat(n||0)).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const money0 = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
+  const num = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
+  if (!products.length) return `<tr><td colspan="11" style="padding:16px;text-align:center;color:var(--text3);font-size:12px;">No products match</td></tr>`;
+  return products.map(p => `<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:9px 12px;font-size:12px;">${truncate(p.name,52)}</td>
+    <td style="padding:9px 8px;text-align:center;"><span style="display:inline-block;min-width:30px;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--bg4);color:${p.score>=65?'var(--green)':(p.score>=45?'var(--amber)':'var(--text2)')}">${p.score}</span></td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.views)}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.atc)}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctv>=15?'var(--green)':'var(--text)'}">${p.ctv.toFixed(1)}%</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;font-weight:${p.purchases>0?'600':'400'};color:${p.purchases>0?'var(--green)':'var(--text3)'}">${num(p.purchases)}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;">${p.revenue>0?money0(p.revenue):'—'}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.metaSpend<1?'var(--amber)':'var(--text)'}">${money(p.metaSpend)}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;color:var(--text2)">${num(p.metaImpr)}</td>
+    <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctr>=3?'var(--green)':'var(--text2)'}">${p.metaImpr>0?p.ctr.toFixed(2)+'%':'—'}</td>
+    <td style="padding:9px 12px;font-size:11px;color:var(--text2);line-height:1.4;">
+      <span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.06);color:${p.recColor};white-space:nowrap;">${p.rec}</span>
+    </td>
+  </tr>`).join('');
+}
+
+function sortBrand(field) {
+  if (!window._brandProducts) return;
+  window._brandProducts.sort((a,b) => (b[field]||0) - (a[field]||0));
+  filterBrand(document.getElementById('brand-search')?.value || '');
+}
+
+function filterBrand(query) {
+  if (!window._brandProducts) return;
+  const q = (query||'').toLowerCase().trim();
+  const filtered = q ? window._brandProducts.filter(p => (p.name||'').toLowerCase().includes(q) || (p.vid||'').includes(q)) : window._brandProducts;
+  const tbody = document.getElementById('brand-tbody');
+  if (tbody) tbody.innerHTML = renderBrandRows(filtered);
 }
 
 // ─── ATTRIBUTION GAP ANALYSIS ─────────────────────────────────────
