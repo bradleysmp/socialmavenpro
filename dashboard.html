@@ -307,10 +307,8 @@
   .creative-card { background: var(--bg3); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); transition: border-color 0.15s; }
   .creative-card:hover { border-color: var(--border2); }
   .creative-thumb { position: relative; width: 100%; aspect-ratio: 1; background: var(--bg4); overflow: hidden; }
-  .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.25s ease; }
-  .creative-thumb-clickable { cursor: zoom-in; }
-  .creative-card:hover .creative-thumb-clickable img { transform: scale(1.04); }
-  .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); background: linear-gradient(135deg, var(--bg4) 0%, rgba(255,107,43,0.06) 100%); letter-spacing: 1px; }
+  .creative-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .creative-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text3); }
   .creative-badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 4px; color: #fff; font-family: 'Syne', sans-serif; }
   .creative-status-badge { position: absolute; top: 8px; left: 8px; font-size: 9px; font-weight: 600; padding: 3px 7px; border-radius: 3px; color: #fff; letter-spacing: 0.6px; backdrop-filter: blur(4px); }
   .creative-meta { padding: 10px 12px; }
@@ -467,16 +465,8 @@
       Pinterest
     </button>
     <button class="ptab" onclick="setPlatform('dpa',this)" id="tab-dpa" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M3 4h10M3 8h7M3 12h9" stroke="white" stroke-width="1.3" stroke-linecap="round"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
+      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#FF6B2B"/><path d="M8.4 3.2h3.4a1 1 0 0 1 1 1v3.4a1 1 0 0 1-.29.7l-4.9 4.9a1 1 0 0 1-1.42 0L3.5 10.5a1 1 0 0 1 0-1.42l4.9-4.9a1 1 0 0 1 .7-.29Z" stroke="white" stroke-width="1.2" stroke-linejoin="round"/><circle cx="10.6" cy="5.4" r="1" fill="white"/></svg>
       Products
-    </button>
-    <button class="ptab" onclick="setPlatform('brand',this)" id="tab-brand" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#B08D57"/><path d="M4.2 11.5V4.5h1.4v5.7h3v1.3z" fill="white"/><path d="M9.6 11.5V4.5H11v7z" fill="white" opacity="0.75"/><circle cx="12.4" cy="5.4" r="0.9" fill="white"/></svg>
-      <span id="tab-brand-label">Brand</span>
-    </button>
-    <button class="ptab" onclick="setPlatform('journey',this)" id="tab-journey" style="display:none">
-      <svg class="ptab-icon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#8B7CD8"/><circle cx="4" cy="8" r="1.5" fill="white"/><circle cx="12" cy="8" r="1.5" fill="white"/><path d="M5.5 8h5" stroke="white" stroke-width="1.3" stroke-linecap="round"/><path d="M8 5v6" stroke="white" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/></svg>
-      Journey
     </button>
   </div>
 
@@ -545,16 +535,6 @@ const CLIENTS = {
     '7231226751496503297': '783788426913932', // Babble & Goose
     '7533015903315984400': '7533015903315984400', // Babble & Goose (US) — TikTok-only, self-mapped
   },
-};
-
-// ─── BRAND TABS ────────────────────────────────────────────
-// Per-client single-brand view, keyed by Meta ad account id.
-//   brand   — must match GA4 item_brand (compared case-insensitively)
-//   label   — tab caption
-//   adToken — substring identifying brand-specific ads by ad_name
-// Add an entry here to switch the tab on for another client/brand.
-const BRAND_TABS = {
-  '468452590544702': { brand: 'Liang & Eimil', label: 'Liang & Eimil', adToken: 'L&E' },
 };
 
 // ─── CLIENT SETTINGS ───────────────────────────────────────
@@ -822,14 +802,6 @@ function selectClient(id) {
   document.getElementById('tab-tiktok').style.display = hasTikTok ? '' : 'none';
   const hasGA4 = Object.values(CLIENTS.ga4).includes(id);
   document.getElementById('tab-dpa').style.display = hasGA4 ? '' : 'none';
-  document.getElementById('tab-journey').style.display = hasGA4 ? '' : 'none';
-  // Brand tab — needs both a brand config and a GA4 property to identify the brand
-  const brandCfg = BRAND_TABS[id];
-  const brandTab = document.getElementById('tab-brand');
-  if (brandTab) {
-    brandTab.style.display = (brandCfg && hasGA4) ? '' : 'none';
-    if (brandCfg) document.getElementById('tab-brand-label').textContent = brandCfg.label;
-  }
   const hasPinterest = Object.values(CLIENTS.pinterest||{}).includes(id);
   const pinTab = document.getElementById('tab-pinterest');
   if (pinTab) pinTab.style.display = hasPinterest ? '' : 'none';
@@ -853,7 +825,7 @@ function selectClient(id) {
 
   // Restore a specific tab from the URL hash (deep-link support)
   if (state._restoreTab) {
-    const tabIds = { facebook:'tab-meta', tiktok:'tab-tiktok', dpa:'tab-dpa', journey:'tab-journey', pinterest:'tab-pinterest', brand:'tab-brand' };
+    const tabIds = { facebook:'tab-meta', tiktok:'tab-tiktok', dpa:'tab-dpa', pinterest:'tab-pinterest' };
     const targetTabId = tabIds[state._restoreTab];
     const targetEl = targetTabId ? document.getElementById(targetTabId) : null;
     const isAvailable = targetEl && targetEl.style.display !== 'none';
@@ -1186,59 +1158,6 @@ async function loadData() {
     let accountId = state.client;
     let organicRows = [];
 
-    // ── SINGLE-BRAND VIEW (Meta only) ──
-    // Meta has no brand dimension, so the brand is identified in GA4 (item_brand)
-    // and joined back to Meta on the Shopify variant id that both sides carry.
-    if (connector === 'brand') {
-      const cfg = BRAND_TABS[state.client];
-      if (!cfg) { showError('No brand configured for this client.'); return; }
-      const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
-      if (!ga4Id) { showError('No GA4 account linked for this client — brand cannot be identified.'); return; }
-
-      showLoading(`Fetching ${cfg.label} data…`);
-
-      const ga4Fields  = ['item_brand','item_id','item_name','items_viewed','items_added_to_cart','items_purchased','item_revenue'];
-      const prodFields = ['product_id','account_id','spend','impressions','clicks'];
-      const adFields   = ['ad_name','campaign','spend','impressions','clicks','actions_purchase','action_values_purchase'];
-
-      const [ga4Rows, metaProductRows, metaAdRows] = await Promise.all([
-        // GA4 item-level — no spend field, so pass -1 to suppress the spend filter
-        (async () => {
-          try {
-            return await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
-          } catch(e) {
-            console.warn('GA4 direct fetch failed, trying proxy:', e.message);
-            try { return await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo); }
-            catch(e2) { console.warn('GA4 proxy fetch also failed:', e2.message); return []; }
-          }
-        })(),
-        // Meta product-level — catalogue delivery per variant
-        (async () => {
-          try {
-            const rows = await fetchWindsorDirect('facebook', accountId, prodFields, state.period, state.dateFrom, state.dateTo, 0);
-            return rows.filter(r => !r.account_id || String(r.account_id) === String(accountId));
-          } catch(e) {
-            console.warn('Meta product direct fetch failed, using proxy:', e.message);
-            try { return await fetchWindsor('facebook', accountId, prodFields, state.period, { min_spend: 0 }, state.dateFrom, state.dateTo); }
-            catch(e2) { console.warn('Meta product proxy fetch failed:', e2.message); return []; }
-          }
-        })(),
-        // Meta ad-level — brand-specific creative, matched on ad_name
-        (async () => {
-          try {
-            return await fetchWindsorDirect('facebook', accountId, adFields, state.period, state.dateFrom, state.dateTo, 0);
-          } catch(e) {
-            console.warn('Meta ad direct fetch failed, using proxy:', e.message);
-            try { return await fetchWindsor('facebook', accountId, adFields, state.period, {}, state.dateFrom, state.dateTo); }
-            catch(e2) { console.warn('Meta ad proxy fetch failed:', e2.message); return []; }
-          }
-        })(),
-      ]);
-
-      renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows);
-      return;
-    }
-
     // ── UNIFIED PRODUCT SCORECARD ──
     if (connector === 'dpa') {
       const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
@@ -1341,76 +1260,6 @@ async function loadData() {
       return;
     }
 
-    // ── ATTRIBUTION GAP ANALYSIS (GA4 + Meta + TikTok) ──
-    // GA4 last-touch (source/medium) vs platform-claimed (Meta/TikTok).
-    // Channel reconstructed from source/medium since Windsor doesn't expose channelGrouping.
-    if (connector === 'journey') {
-      const ga4Id = Object.entries(CLIENTS.ga4).find(([k,v])=>v===state.client)?.[0];
-      if (!ga4Id) { showError('No GA4 account linked for this client.'); return; }
-
-      showLoading('Fetching attribution data…');
-      // Use confirmed-working Windsor GA4 fields: source, medium, sessions, conversions, transactionrevenue.
-      // The first_user_default_channel_group field does NOT exist in Windsor — only session-level data available.
-      const ga4Fields = ['source', 'medium', 'sessions', 'conversions', 'transactionrevenue'];
-      const tikTokId = Object.entries(CLIENTS.tiktok||{}).find(([k,v])=>v===state.client)?.[0];
-
-      // All three sources are independent — fetch in parallel (previously sequential: 3x slower)
-      const [ga4Rows, metaAgg, ttAgg] = await Promise.all([
-        // GA4 — direct first, proxy fallback
-        (async () => {
-          try {
-            return await fetchWindsorDirect('googleanalytics4', ga4Id, ga4Fields, state.period, state.dateFrom, state.dateTo, -1);
-          } catch(e) {
-            try {
-              return await fetchWindsor('googleanalytics4', ga4Id, ga4Fields, state.period, {}, state.dateFrom, state.dateTo);
-            } catch(e2) { console.warn('GA4 fetch failed:', e2.message); return null; }
-          }
-        })(),
-        // Meta platform-claimed totals
-        (async () => {
-          const agg = { conversions: 0, revenue: 0, spend: 0 };
-          try {
-            const rows = await fetchWindsor('facebook', state.client,
-              ['actions_purchase', 'action_values_offsite_conversion_fb_pixel_purchase', 'spend'],
-              state.period, {}, state.dateFrom, state.dateTo);
-            rows.forEach(r => {
-              agg.conversions += parseFloat(r.actions_purchase||0);
-              agg.revenue += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
-              agg.spend += parseFloat(r.spend||0);
-            });
-          } catch(e) { console.warn('Meta platform fetch failed:', e.message); }
-          return agg;
-        })(),
-        // TikTok platform-claimed totals (if connected)
-        (async () => {
-          const agg = { conversions: 0, revenue: 0, spend: 0 };
-          if (!tikTokId) return agg;
-          try {
-            const rows = await fetchWindsor('tiktok', tikTokId,
-              ['spend', 'complete_payment', 'complete_payment_roas'],
-              state.period, {}, state.dateFrom, state.dateTo);
-            rows.forEach(r => {
-              const s = parseFloat(r.spend||0);
-              agg.spend += s;
-              agg.conversions += parseFloat(r.complete_payment||0);
-              agg.revenue += s * parseFloat(r.complete_payment_roas||0);
-            });
-          } catch(e) { console.warn('TikTok platform fetch failed:', e.message); }
-          return agg;
-        })(),
-      ]);
-
-      if (ga4Rows === null) {
-        showError('Could not fetch GA4 attribution data. Check Windsor connection.');
-        return;
-      }
-
-      renderAttributionGap(ga4Rows, {
-        metaPlatformConversions: metaAgg.conversions, metaPlatformRevenue: metaAgg.revenue, metaSpend: metaAgg.spend,
-        ttPlatformConversions: ttAgg.conversions, ttPlatformRevenue: ttAgg.revenue, ttSpend: ttAgg.spend,
-      });
-      return;
-    }
 
     if (connector === 'tiktok') {
       const tikTokId = Object.entries(CLIENTS.tiktok||{}).find(([k,v])=>v===state.client)?.[0];
@@ -1481,20 +1330,13 @@ async function loadData() {
       : ['date','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const campFields = isLeadGen
-      ? ['campaign','account_id','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
+      ? ['campaign','account_id','objective','spend','impressions','clicks','reach','actions_lead','actions_offsite_conversion_fb_pixel_lead','actions_purchase','cost_per_action_type_offsite_conversion_fb_pixel_lead']
       : ['campaign','account_id','spend','impressions','clicks','reach','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase'];
 
     const creativeFields = isLeadGen
       ? ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_offsite_conversion_fb_pixel_lead','actions_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status']
       : ['ad_name','ad_id','account_id','spend','impressions','clicks','actions_purchase','action_values_offsite_conversion_fb_pixel_purchase', connector === 'tiktok' ? 'ad_status' : 'effective_status'];
-    // Windsor image fields are connector-specific:
-    // Meta exposes image_url + thumbnail_url; TikTok exposes video_thumbnail_url (video ads)
-    // and image_url (image ads) — requesting thumbnail_url on TikTok returns nothing.
-    // item_id is the underlying TikTok post ID, used to resolve Spark Ad thumbnails
-    // (Spark Ads return null video_thumbnail_url because the video is the creator's).
-    const creativeImageFields = connector === 'tiktok'
-      ? ['ad_id','video_thumbnail_url','item_id']
-      : ['ad_id','image_url','thumbnail_url'];
+    const creativeImageFields = ['ad_id','image_url','thumbnail_url'];
 
     const [rows, campRows, creativeRows] = await Promise.all([
       fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo),
@@ -1504,47 +1346,25 @@ async function loadData() {
 
     // Optionally fetch creative images — use direct browser fetch to bypass Netlify proxy timeout.
     // Windsor takes time to generate signed thumbnail URLs; the direct fetch has no timeout limit.
-    // Fetch creative images with two independent paths: direct browser fetch first
-    // (no Netlify timeout limit — Windsor is slow generating signed URLs), then the
-    // Netlify proxy as fallback if the direct call fails (e.g. CORS policy change).
-    // Previously a single direct-fetch failure silently blanked every thumbnail.
-    async function fetchCreativeImages(fields) {
-      try {
-        return await fetchWindsorDirect(connector, accountId, fields, state.period, state.dateFrom, state.dateTo, 0);
-      } catch(e) {
-        console.warn('Direct image fetch failed, retrying via Netlify proxy:', e.message);
-        return await fetchWindsor(connector, accountId, fields, state.period, {}, state.dateFrom, state.dateTo);
-      }
-    }
-
     try {
-      let imageRows = await fetchCreativeImages(creativeImageFields);
-      // TikTok image ads live in a separate field (image_url) which can hard-fail with
-      // "insufficient permissions" on some accounts — fetch it separately and tolerate failure
-      // so video thumbnails still render even when image_url errors.
-      if (connector === 'tiktok') {
-        try {
-          const tikImgRows = await fetchCreativeImages(['ad_id','image_url']);
-          imageRows = (imageRows||[]).concat(tikImgRows||[]);
-        } catch(e) {
-          console.warn('TikTok image_url fetch failed (video thumbnails unaffected):', e.message);
-        }
+      let imageRows;
+      if (connector === 'facebook') {
+        imageRows = await fetchWindsorDirect(connector, accountId, creativeImageFields, state.period, state.dateFrom, state.dateTo, 0);
+      } else {
+        imageRows = await fetchWindsor(connector, accountId, creativeImageFields, state.period, {}, state.dateFrom, state.dateTo);
       }
       const imgMap = {};
       (imageRows||[]).forEach(r => {
         if (!r.ad_id) return;
         if (!imgMap[r.ad_id]) imgMap[r.ad_id] = {};
-        const thumb = r.thumbnail_url || r.video_thumbnail_url;
         if (r.image_url && !imgMap[r.ad_id].image_url) imgMap[r.ad_id].image_url = r.image_url;
-        if (thumb && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = thumb;
-        if (r.item_id && !imgMap[r.ad_id].item_id) imgMap[r.ad_id].item_id = r.item_id;
+        if (r.thumbnail_url && !imgMap[r.ad_id].thumbnail_url) imgMap[r.ad_id].thumbnail_url = r.thumbnail_url;
       });
       creativeRows.forEach(r => {
         const img = imgMap[r.ad_id];
         if (img) {
           if (img.image_url) r.image_url = img.image_url;
           if (img.thumbnail_url) r.thumbnail_url = img.thumbnail_url;
-          if (img.item_id) r.item_id = img.item_id;
         }
       });
     } catch(e) {
@@ -1581,8 +1401,29 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
   const totalLeads = isLeadGen ? sum(active, 'actions_offsite_conversion_fb_pixel_lead') : 0;
   const totalPurchases = isLeadGen ? sum(active, 'actions_purchase') : 0;
   const totalLPV = isLeadGen ? sum(active, 'actions_landing_page_view') : 0;
-  const cpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
-  const cpp = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
+  // CPL/CPP against objective-matched spend, not total account spend.
+  // Accounts running both lead campaigns (OUTCOME_LEADS) and purchase campaigns
+  // (OUTCOME_SALES) would otherwise show both metrics inflated — each metric was
+  // absorbing the other objective's spend. Split by campaign objective; fall back
+  // to result-pattern inference (leads vs purchases) when objective is missing,
+  // and to total spend only if campaign data is unavailable.
+  let leadSpend = 0, salesSpend = 0, hasObjectiveSplit = false;
+  if (isLeadGen && campRows && campRows.length) {
+    campRows.forEach(r => {
+      const sp = parseFloat(r.spend||0);
+      if (sp <= 0) return;
+      const obj = (r.objective||'').toUpperCase();
+      const rLeads = parseFloat(r.actions_offsite_conversion_fb_pixel_lead||0);
+      const rPurch = parseFloat(r.actions_purchase||0);
+      if (obj.includes('LEAD')) { leadSpend += sp; hasObjectiveSplit = true; }
+      else if (obj.includes('SALES') || obj.includes('PURCHASE') || obj.includes('CONVERSIONS')) { salesSpend += sp; hasObjectiveSplit = true; }
+      else if (rLeads > rPurch) { leadSpend += sp; }
+      else if (rPurch > 0) { salesSpend += sp; }
+      else { leadSpend += sp; } // no results yet — default to lead bucket for lead-gen accounts
+    });
+  }
+  const cpl = totalLeads > 0 ? ((leadSpend > 0 ? leadSpend : totalSpend) / totalLeads) : 0;
+  const cpp = totalPurchases > 0 ? ((salesSpend > 0 ? salesSpend : totalSpend) / totalPurchases) : 0;
   const leadRate = totalLPV > 0 ? (totalLeads / totalLPV * 100) : 0;
   const clickToLead = totalClicks > 0 ? (totalLeads / totalClicks * 100) : 0;
 
@@ -1729,9 +1570,9 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
     <div class="metrics-grid">
       ${metricCard('Ad Spend', fmt(totalSpend), `${active.length}d · ${fmt(totalSpend/active.length)}/day`, '', delta(totalSpend, cmpSpend, false))}
       ${metricCard('Leads', totalLeads.toLocaleString(), 'pixel-tracked', totalLeads > 0 ? 'var(--green)' : 'var(--text3)', delta(totalLeads, cmpLeads, false))}
-      ${metricCard('Cost Per Lead', fmt(cpl), targetCpl ? `target £${targetCpl.toFixed(2)}` : 'CPL', cplColor, delta(cpl, cmpCpl, true))}
+      ${metricCard('Cost Per Lead', fmt(cpl), (targetCpl ? `target £${targetCpl.toFixed(2)}` : 'CPL') + (hasObjectiveSplit ? ` · ${fmt(leadSpend)} lead spend` : ''), cplColor, hasObjectiveSplit ? '' : delta(cpl, cmpCpl, true))}
       ${metricCard('Purchases', totalPurchases.toLocaleString(), `CPP ${fmt(cpp)}`, totalPurchases > 0 ? 'var(--green)' : 'var(--text3)', '')}
-      ${metricCard('Cost Per Purchase', fmt(cpp), targetCpp ? `target £${targetCpp.toFixed(0)}` : 'direct bookings', cpp > 0 && targetCpp ? (cpp <= targetCpp ? 'var(--green)' : 'var(--red)') : '', '')}
+      ${metricCard('Cost Per Purchase', fmt(cpp), (targetCpp ? `target £${targetCpp.toFixed(0)}` : 'direct bookings') + (hasObjectiveSplit ? ` · ${fmt(salesSpend)} sales spend` : ''), cpp > 0 && targetCpp ? (cpp <= targetCpp ? 'var(--green)' : 'var(--red)') : '', '')}
       ${metricCard('Landing Page Views', totalLPV.toLocaleString(), `${leadRate.toFixed(1)}% lead rate`, '', '')}
       ${metricCard('Click → Lead', clickToLead.toFixed(2)+'%', `${totalClicks.toLocaleString()} clicks`, '', '')}
       ${metricCard('CPM', '£'+avgCpm.toFixed(2), `${(totalImpressions/1000).toFixed(0)}k impressions`, '', delta(avgCpm, cmpCpm, true))}
@@ -2114,36 +1955,16 @@ function renderDashboard(rows, campRows, creativeRows, connector, organicRows = 
           } else if (isArchived) {
             statusBadge = `<div class="creative-status-badge" style="background:rgba(40,42,46,0.92);color:#86878a;">OFF</div>`;
           }
-          // Spark Ads (creator posts) return no thumbnail via the Ads API — resolve one
-          // from the underlying TikTok post through the oEmbed serverless function.
-          const directImg = pickCreativeImage(c);
-          const sparkThumb = (!directImg && connector === 'tiktok' && c.item_id)
-            ? `/.netlify/functions/tiktok-thumb?item_id=${c.item_id}` : null;
-          // Load straight from the platform CDN (referrerpolicy avoids referer blocks;
-          // browsers aren't IP-blocked the way serverless egress can be). If the CDN
-          // rejects the request, onerror retries once through the imgproxy function,
-          // then falls back to the initials tile.
-          const displaySrc = sparkThumb || (directImg ? directImg.replace(/"/g,'%22') : null);
-          const proxySrc = (!sparkThumb && directImg) ? imgProxy(directImg) : '';
-          // TikTok cards click through to the live post; everything else enlarges the image.
-          const clickUrl = (connector === 'tiktok' && c.item_id)
-            ? `https://www.tiktok.com/@_/video/${c.item_id}`
-            : (displaySrc ? displaySrc.replace(/'/g,'%27') : null);
-          const clickTitle = (connector === 'tiktok' && c.item_id) ? 'View on TikTok' : 'Open full size';
-          // Catalogue ads have no single creative — badge them so the avatar or
-          // initials tile reads as intentional rather than a broken thumbnail.
-          const catalogueBadge = (connector === 'facebook' && isCatalogueAd(c))
-            ? `<div style="position:absolute;bottom:8px;left:8px;font-size:9px;font-weight:600;padding:3px 7px;border-radius:3px;color:#fff;letter-spacing:0.6px;background:rgba(40,42,46,0.85);backdrop-filter:blur(4px);">CATALOGUE</div>` : '';
+          const displayImg = imgProxy(c.thumbnail_url || c.image_url);
           return `<div class="creative-card" style="${!isActive && status ? 'opacity:0.7;' : ''}">
-            <div class="creative-thumb${clickUrl ? ' creative-thumb-clickable' : ''}"${clickUrl ? ` onclick="window.open('${clickUrl}','_blank')" title="${clickTitle}"` : ''}>
-              ${displaySrc
-                ? `<img src="${displaySrc}" alt="" loading="lazy" referrerpolicy="no-referrer" data-proxy="${proxySrc}" onerror="if(this.dataset.proxy){this.src=this.dataset.proxy;this.dataset.proxy='';}else{this.style.display='none';this.nextElementSibling.style.display='flex';}">`
+            <div class="creative-thumb">
+              ${displayImg
+                ? `<img src="${displayImg}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
                 : ''}
-              <div class="creative-fallback"${displaySrc?' style="display:none"':''}>
+              <div class="creative-fallback"${displayImg?' style="display:none"':''}>
                 ${c.name.slice(0,2).toUpperCase()}
               </div>
               ${statusBadge}
-              ${catalogueBadge}
               ${showBadge ? `<div class="creative-badge" style="background:${badgeColor}">${roas.toFixed(1)}x</div>` : ''}
             </div>
             <div class="creative-meta">
@@ -2298,25 +2119,6 @@ function imgProxy(url) {
   return `/.netlify/functions/imgproxy?url=${encodeURIComponent(url)}`;
 }
 
-// Meta returns a generic grey placeholder as image_url for many video/DPA ads —
-// the same asset across every account. Treat it as "no image" so we fall through
-// to thumbnail_url (or the initials fallback) instead of rendering a grey box.
-const META_PLACEHOLDER_IMG = 't39.2147-6/75341531_494485104475166';
-
-function isMetaPlaceholder(url) { return !!(url && url.includes(META_PLACEHOLDER_IMG)); }
-
-// Catalogue/dynamic ads (DPA, Advantage+) assemble creative per-user at delivery,
-// so Meta's API returns the placeholder instead of an image — detectable signal.
-function isCatalogueAd(c) { return isMetaPlaceholder(c.image_url) || isMetaPlaceholder(c.thumbnail_url); }
-
-function pickCreativeImage(c) {
-  const fullImg = !isMetaPlaceholder(c.image_url) ? c.image_url : null;
-  const thumb = !isMetaPlaceholder(c.thumbnail_url) ? c.thumbnail_url : null;
-  // Prefer the full-size creative (Meta image_url is ~627px, thumbnail_url is often
-  // a 64px page avatar); fall back to the thumbnail rather than showing nothing.
-  return fullImg || thumb || null;
-}
-
 function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
   if (!rows || !rows.length) return [];
   const map = {};
@@ -2325,7 +2127,7 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
     if (!map[id]) map[id] = {
       id, name: r.ad_name || 'Unknown',
       spend:0, rev:0, orders:0, leads:0, impressions:0, clicks:0,
-      image_url: null, thumbnail_url: null, item_id: null, status: null
+      image_url: null, thumbnail_url: null, status: null
     };
     const rowSpend = parseFloat(r.spend||0);
     map[id].spend += rowSpend;
@@ -2341,9 +2143,8 @@ function aggregateCreatives(rows, isLeadGen = false, connector = 'facebook') {
       map[id].rev += parseFloat(r.action_values_offsite_conversion_fb_pixel_purchase||0);
       map[id].orders += parseFloat(r.actions_purchase||0);
     }
-    if (!map[id].image_url && r.image_url) map[id].image_url = r.image_url;
-    if (!map[id].thumbnail_url && (r.thumbnail_url||r.video_thumbnail_url)) map[id].thumbnail_url = r.thumbnail_url||r.video_thumbnail_url;
-    if (!map[id].item_id && r.item_id) map[id].item_id = r.item_id;
+    if (!map[id].image_url && (r.image_url||r.video_cover_url)) map[id].image_url = r.image_url||r.video_cover_url;
+    if (!map[id].thumbnail_url && r.thumbnail_url) map[id].thumbnail_url = r.thumbnail_url;
     // Track status — Meta uses effective_status (ACTIVE/PAUSED/ARCHIVED/DELETED),
     // TikTok uses ad_status (ENABLE/DISABLE/DELETE/SUSPEND etc).
     // Prefer ACTIVE/ENABLE over other values across multiple rows for the same ad.
@@ -2756,521 +2557,6 @@ function renderProductScorecard(metaRows, ga4Rows, merchantCat, merchantStock, h
           ${renderDPARows(joined, hasMerchant, hasGA4Joined, hasGA4Connected)}
         </tbody>
       </table>
-    </div>
-  </div>`;
-
-  document.getElementById('content').innerHTML = html;
-}
-
-// ─── SINGLE-BRAND VIEW (Meta only) ────────────────────────────────
-// Meta exposes no brand dimension. The brand is resolved in GA4 via item_brand,
-// then joined back to Meta on the Shopify variant id that appears in both:
-//   GA4  item_id     → shopify_ZZ_<productId>_<variantId>
-//   Meta product_id  → "<variantId>, <product title>"
-// Everything paid on this tab is Meta. GA4 is used only to identify the brand
-// and to supply on-site demand signals Meta cannot see.
-
-function brandVariantFromGA4(itemId) {
-  const parts = String(itemId || '').split('_');
-  return parts.length ? parts[parts.length - 1] : '';
-}
-function brandVariantFromMeta(productId) {
-  return String(productId || '').split(',')[0].trim();
-}
-
-function buildBrandProducts(brandName, ga4Rows, metaProductRows) {
-  const target = String(brandName || '').toLowerCase();
-
-  // Meta side — aggregate delivery by variant id
-  const metaMap = {};
-  (metaProductRows || []).forEach(r => {
-    const vid = brandVariantFromMeta(r.product_id);
-    // Numeric-only guard drops catalogue-set rows, which use a different id space
-    if (!vid || !/^\d+$/.test(vid)) return;
-    if (!metaMap[vid]) metaMap[vid] = { spend:0, impressions:0, clicks:0 };
-    metaMap[vid].spend       += parseFloat(r.spend || 0);
-    metaMap[vid].impressions += parseFloat(r.impressions || 0);
-    metaMap[vid].clicks      += parseFloat(r.clicks || 0);
-  });
-
-  // GA4 side — brand rows only, aggregated by variant id. GA4 emits the same
-  // variant under several titles when a product name has been edited, so these
-  // are collapsed and the duplication surfaced as a data-quality flag.
-  const ga4Map = {};
-  (ga4Rows || []).forEach(r => {
-    if (String(r.item_brand || '').toLowerCase() !== target) return;
-    const vid = brandVariantFromGA4(r.item_id);
-    if (!vid) return;
-    if (!ga4Map[vid]) ga4Map[vid] = { vid, name: r.item_name || vid, views:0, atc:0, purchases:0, revenue:0, aliases:0 };
-    const g = ga4Map[vid];
-    g.views     += parseFloat(r.items_viewed || 0);
-    g.atc       += parseFloat(r.items_added_to_cart || 0);
-    g.purchases += parseFloat(r.items_purchased || 0);
-    g.revenue   += parseFloat(r.item_revenue || 0);
-    g.aliases   += 1;
-    if ((r.item_name || '').length > g.name.length) g.name = r.item_name;
-  });
-
-  return Object.values(ga4Map).map(g => {
-    const m = metaMap[g.vid] || { spend:0, impressions:0, clicks:0 };
-    const ctr = m.impressions > 0 ? m.clicks / m.impressions * 100 : 0;
-    const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
-    // GA4 counts add-to-cart and purchase quantity, which can exceed units
-    // viewed on multi-quantity orders — capped so the rates stay readable
-    const ctv = g.views > 0 ? Math.min(100, g.atc / g.views * 100) : 0;
-    const ptv = g.views > 0 ? Math.min(100, g.purchases / g.views * 100) : 0;
-    const aov = g.purchases > 0 ? g.revenue / g.purchases : 0;
-
-    // Score — on-site demand weighted against how little Meta spend sits behind
-    // it. A high score means proven or strongly signalled demand with headroom.
-    let score = 0;
-    if (g.views >= 50)      score += 25;
-    else if (g.views >= 30) score += 20;
-    else if (g.views >= 20) score += 15;
-    else if (g.views >= 10) score += 10;
-    else if (g.views >= 5)  score += 5;
-
-    if (ctv >= 25)      score += 25;
-    else if (ctv >= 15) score += 20;
-    else if (ctv >= 8)  score += 14;
-    else if (ctv >= 3)  score += 8;
-    else if (ctv > 0)   score += 4;
-
-    if (g.purchases >= 4)      score += 30;
-    else if (g.purchases >= 2) score += 22;
-    else if (g.purchases >= 1) score += 14;
-
-    if (m.impressions >= 20) {
-      if (ctr >= 4)      score += 10;
-      else if (ctr >= 2) score += 6;
-      else if (ctr >= 1) score += 3;
-    }
-
-    if (m.spend < 1)       score += 10;
-    else if (m.spend < 5)  score += 7;
-    else if (m.spend < 20) score += 4;
-
-    score = Math.min(100, Math.round(score));
-
-    let rec, recColor, recReason;
-    if (g.purchases >= 2 && m.spend < 20) {
-      rec = 'Scale now'; recColor = 'var(--green)';
-      recReason = `${g.purchases} sales on £${m.spend.toFixed(2)} Meta spend — proven converter with no budget behind it`;
-    } else if (g.purchases >= 1 && m.spend < 10) {
-      rec = 'Scale now'; recColor = 'var(--green)';
-      recReason = `Converts at ${ptv.toFixed(1)}% view-to-purchase on £${m.spend.toFixed(2)} spend — push in DPA`;
-    } else if (ctv >= 15 && g.purchases === 0) {
-      rec = 'Push — high intent'; recColor = 'var(--amber)';
-      recReason = `${ctv.toFixed(0)}% add-to-cart but no sales — strong demand, likely price, stock or lead-time friction`;
-    } else if (g.views >= 30 && ctv < 3) {
-      rec = 'Review PDP'; recColor = 'var(--red)';
-      recReason = `${Math.round(g.views)} views but only ${ctv.toFixed(1)}% add to cart — imagery, price or copy is losing them`;
-    } else if (g.views >= 20 && ctv >= 3 && m.spend < 10) {
-      rec = 'Test budget'; recColor = 'var(--amber)';
-      recReason = `${Math.round(g.views)} views at ${ctv.toFixed(0)}% add-to-cart on £${m.spend.toFixed(2)} spend — enough demand to justify a test`;
-    } else if (m.spend < 1 && g.views >= 20) {
-      rec = 'Untapped'; recColor = 'var(--text2)';
-      recReason = `${Math.round(g.views)} views and effectively no Meta spend — worth a test allocation`;
-    } else {
-      rec = 'Monitor'; recColor = 'var(--text3)';
-      recReason = 'Not enough signal to act on yet';
-    }
-    if (g.aliases > 1) recReason = `⚠ ${g.aliases} catalogue titles for this variant · ${recReason}`;
-
-    return { vid:g.vid, name:g.name, views:g.views, atc:g.atc, purchases:g.purchases,
-             revenue:g.revenue, aov, ctv, ptv, metaSpend:m.spend, metaImpr:m.impressions,
-             metaClicks:m.clicks, ctr, cpc, score, rec, recColor, recReason, aliases:g.aliases };
-  }).sort((a,b) => b.score - a.score);
-}
-
-function renderBrandTab(cfg, ga4Rows, metaProductRows, metaAdRows) {
-  const money = (n) => `£${(parseFloat(n||0)).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const money0 = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
-  const num   = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
-
-  const products = buildBrandProducts(cfg.brand, ga4Rows, metaProductRows);
-
-  if (!products.length) {
-    showError(`No ${cfg.label} products found in GA4 for this period. Check that item_brand is populated in the Shopify feed.`);
-    return;
-  }
-
-  // ── Brand-specific Meta creative, matched on ad_name
-  const token = String(cfg.adToken || '').toLowerCase();
-  const adMap = {};
-  (metaAdRows || []).forEach(r => {
-    const name = r.ad_name || '';
-    if (!token || !name.toLowerCase().includes(token)) return;
-    if (!adMap[name]) adMap[name] = { name, campaign:r.campaign||'', spend:0, impressions:0, clicks:0, purchases:0, revenue:0 };
-    const a = adMap[name];
-    a.spend       += parseFloat(r.spend || 0);
-    a.impressions += parseFloat(r.impressions || 0);
-    a.clicks      += parseFloat(r.clicks || 0);
-    a.purchases   += parseFloat(r.actions_purchase || 0);
-    a.revenue     += parseFloat(r.action_values_purchase || 0);
-  });
-  const ads = Object.values(adMap).sort((a,b) => b.spend - a.spend);
-
-  const adTot = ads.reduce((t,a) => ({
-    spend:t.spend+a.spend, impressions:t.impressions+a.impressions, clicks:t.clicks+a.clicks,
-    purchases:t.purchases+a.purchases, revenue:t.revenue+a.revenue
-  }), {spend:0,impressions:0,clicks:0,purchases:0,revenue:0});
-  const adCtr  = adTot.impressions > 0 ? adTot.clicks/adTot.impressions*100 : 0;
-  const adCpc  = adTot.clicks > 0 ? adTot.spend/adTot.clicks : 0;
-  const adRoas = adTot.spend > 0 ? adTot.revenue/adTot.spend : 0;
-
-  // ── Catalogue-side totals for this brand
-  const catSpend  = products.reduce((t,p) => t+p.metaSpend, 0);
-  const catImpr   = products.reduce((t,p) => t+p.metaImpr, 0);
-  const catClicks = products.reduce((t,p) => t+p.metaClicks, 0);
-  const totalMetaSpend = adTot.spend + catSpend;
-
-  // ── Brand demand (GA4, all sources — context for the Meta numbers above)
-  const views     = products.reduce((t,p) => t+p.views, 0);
-  const atc       = products.reduce((t,p) => t+p.atc, 0);
-  const units     = products.reduce((t,p) => t+p.purchases, 0);
-  const revenue   = products.reduce((t,p) => t+p.revenue, 0);
-
-  const scaleNow  = products.filter(p => p.rec === 'Scale now').length;
-  const highIntent= products.filter(p => p.rec === 'Push — high intent').length;
-  const noSpend   = products.filter(p => p.metaSpend < 1).length;
-
-  const top10 = products.slice(0, 10);
-
-  const recPill = (p) => `<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;
-    background:${p.recColor === 'var(--text3)' ? 'var(--bg4)' : 'rgba(255,255,255,0.06)'};color:${p.recColor};white-space:nowrap;">${p.rec}</span>`;
-
-  const html = `<div class="fade-in" style="padding:0">
-    <div style="padding:20px 24px 0;">
-
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-        <div>
-          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:3px;">${cfg.label} — Meta performance</div>
-          <div style="font-size:12px;color:var(--text3);">
-            Brand isolated via GA4 <code style="color:var(--text2)">item_brand</code>, joined to Meta on Shopify variant ID
-            <span style="margin-left:6px;padding:2px 7px;border-radius:3px;background:rgba(24,119,242,0.15);color:var(--meta);font-size:10px;font-weight:500;">Meta only</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Meta paid activity -->
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">Meta paid activity — ${cfg.label}</div>
-      <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Total Meta spend', money(totalMetaSpend), `${money(adTot.spend)} creative · ${money(catSpend)} catalogue`, 'var(--orange)')}
-        ${metricCard('Brand creative spend', money(adTot.spend), `${ads.length} ad${ads.length===1?'':'s'} matching "${cfg.adToken}"`, '')}
-        ${metricCard('Impressions', num(adTot.impressions + catImpr), `${num(adTot.clicks + catClicks)} clicks`, '')}
-        ${metricCard('Creative CTR', adCtr.toFixed(2)+'%', `${money(adCpc)} CPC`, adCtr>=2?'var(--green)':'')}
-        ${metricCard('Meta-reported ROAS', adTot.spend>0 ? adRoas.toFixed(2)+'x' : '—', `${num(adTot.purchases)} purchases · ${money0(adTot.revenue)}`, adRoas>=2?'var(--green)':(adTot.spend>0?'var(--amber)':'var(--text3)'))}
-      </div>
-
-      <!-- On-site demand -->
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">On-site demand — ${cfg.label} (all sources, GA4)</div>
-      <div class="metrics-grid" style="margin-bottom:16px;">
-        ${metricCard('Product views', num(views), `${products.length} SKUs with activity`, '')}
-        ${metricCard('Add to cart', num(atc), views>0 ? (atc/views*100).toFixed(1)+'% of views' : '—', '')}
-        ${metricCard('Units sold', num(units), units>0 ? money0(revenue/units)+' per unit' : 'no sales in period', units>0?'var(--green)':'var(--text3)')}
-        ${metricCard('Brand revenue', money0(revenue), 'retail, excl. tax & shipping', 'var(--green)')}
-        ${metricCard('SKUs with no Meta spend', noSpend.toString(), `of ${products.length} with demand`, noSpend>0?'var(--amber)':'var(--text3)')}
-      </div>
-
-      <!-- Top 10 scalable -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--orange);font-weight:600;">Top 10 scalable products</div>
-        <div style="font-size:11px;color:var(--text3);">${scaleNow} ready to scale · ${highIntent} high intent, no sales yet</div>
-      </div>
-      <div style="overflow-x:auto;margin-bottom:6px;">
-        <table style="width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
-          <thead><tr style="background:var(--bg3);">
-            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;width:28px;">#</th>
-            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:210px;">Product</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange);font-weight:500;">Score</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Views</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ATC&nbsp;%</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">Units</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Meta&nbsp;spend</th>
-            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:230px;">Why</th>
-          </tr></thead>
-          <tbody>
-            ${top10.map((p,i) => `<tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:9px 10px;font-size:11px;color:var(--text3);">${i+1}</td>
-              <td style="padding:9px 10px;font-size:12px;color:var(--text);">${truncate(p.name, 54)}</td>
-              <td style="padding:9px 8px;text-align:center;"><span style="display:inline-block;min-width:30px;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--bg4);color:${p.score>=65?'var(--green)':(p.score>=45?'var(--amber)':'var(--text2)')}">${p.score}</span></td>
-              <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(p.views)}</td>
-              <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.ctv>=15?'var(--green)':'var(--text)'}">${p.ctv.toFixed(1)}%</td>
-              <td style="padding:9px 8px;text-align:center;font-size:12px;font-weight:${p.purchases>0?'600':'400'};color:${p.purchases>0?'var(--green)':'var(--text3)'}">${num(p.purchases)}</td>
-              <td style="padding:9px 8px;text-align:center;font-size:12px;color:${p.metaSpend<1?'var(--amber)':'var(--text)'}">${money(p.metaSpend)}</td>
-              <td style="padding:9px 10px;font-size:11px;color:var(--text2);line-height:1.4;">${recPill(p)} ${p.recReason}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <div style="font-size:11px;color:var(--text3);padding:8px 14px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:18px;">
-        <strong style="color:var(--text)">Score</strong> on-site demand (views + add-to-cart rate) + proven conversion + Meta creative efficiency, weighted up where Meta spend is low.
-        A high score means demand that Meta is not yet funding. <strong style="color:var(--text)">ATC %</strong> add to cart ÷ views, capped at 100%.
-      </div>
-
-      ${ads.length ? `
-      <!-- Brand creative -->
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:8px;font-weight:600;">Brand creative — ads matching "${cfg.adToken}"</div>
-      <div style="overflow-x:auto;margin-bottom:18px;">
-        <table style="width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
-          <thead><tr style="background:var(--bg3);">
-            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;min-width:220px;">Ad</th>
-            <th style="text-align:left;padding:9px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:500;">Campaign</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Spend</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Impr.</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">Clicks</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">CTR</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--meta);font-weight:500;">CPC</th>
-            <th style="padding:9px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);font-weight:500;">ROAS</th>
-          </tr></thead>
-          <tbody>
-            ${ads.map(a => {
-              const c = a.impressions>0 ? a.clicks/a.impressions*100 : 0;
-              const cp = a.clicks>0 ? a.spend/a.clicks : 0;
-              const r = a.spend>0 ? a.revenue/a.spend : 0;
-              return `<tr style="border-bottom:1px solid var(--border);">
-                <td style="padding:9px 10px;font-size:12px;">${truncate(a.name,48)}</td>
-                <td style="padding:9px 10px;font-size:11px;color:var(--text3);">${truncate(a.campaign,22)}</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;">${money(a.spend)}</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(a.impressions)}</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;">${num(a.clicks)}</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;color:${c>=3?'var(--green)':'var(--text)'}">${c.toFixed(2)}%</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;">${money(cp)}</td>
-                <td style="padding:9px 8px;text-align:center;font-size:12px;color:${r>=2?'var(--green)':'var(--text3)'}">${a.spend>0?r.toFixed(2)+'x':'—'}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>` : `
-      <div style="font-size:12px;color:var(--amber);padding:10px 14px;background:var(--amber-bg);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:18px;">
-        No ads matching "${cfg.adToken}" ran in this period — the brand is only being carried inside catalogue campaigns.
-      </div>`}
-    </div>
-  </div>`;
-
-  document.getElementById('content').innerHTML = html;
-}
-
-// ─── ATTRIBUTION GAP ANALYSIS ─────────────────────────────────────
-// GA4 last-touch by channel (reconstructed from source/medium) vs platform-claimed
-// from Meta/TikTok. Shows the structural under-attribution paid social experiences
-// in GA4's last-click model. Honest about what the data can and can't tell us.
-function renderAttributionGap(ga4Rows, platform) {
-  const fmt = (n) => `£${Math.round(parseFloat(n||0)).toLocaleString('en-GB')}`;
-  const fmtN = (n) => Math.round(parseFloat(n||0)).toLocaleString('en-GB');
-
-  // Channel reconstruction from source/medium pairs. Windsor's GA4 connector doesn't
-  // expose default_channel_grouping, so we classify ourselves using GA4's documented
-  // rules (https://support.google.com/analytics/answer/9756891).
-  function classifyChannel(source, medium) {
-    const s = (source || '').toLowerCase();
-    const m = (medium || '').toLowerCase();
-
-    // Direct
-    if ((s === '(direct)' || s === '(none)' || s === '') && (m === '(none)' || m === '(not set)' || m === '')) return 'Direct';
-
-    // Paid Social — Meta variants
-    if ((s.includes('facebook') || s === 'fb' || s.includes('instagram') || s === 'ig' || s === 'meta' || s === 'l.facebook.com' || s === 'm.facebook.com')
-        && (m === 'paid' || m === 'paid_social' || m === 'paidsocial' || m === 'cpc' || m === 'ppc' || m.includes('facebook_') || m.includes('instagram_') || m === 'social' || m === 'meta')) return 'Paid Social — Meta';
-
-    // Paid Social — TikTok
-    if ((s === 'tiktok' || s === 'tiktok.com' || s === 'paidtiktok') && (m === 'paid' || m === 'cpc' || m === 'paid_social' || m === 'paidsocial')) return 'Paid Social — TikTok';
-
-    // Paid Social — Pinterest
-    if ((s === 'pinterest' || s.includes('pinterest.com')) && (m === 'paidsocial' || m === 'paid' || m === 'cpc' || m === 'ppc')) return 'Paid Social — Pinterest';
-
-    // Paid Search
-    if ((s === 'google' || s === 'bing' || s === 'yahoo') && (m === 'cpc' || m === 'ppc' || m === 'paid')) return 'Paid Search';
-
-    // Organic Search
-    if (m === 'organic') return 'Organic Search';
-
-    // Email
-    if (m === 'email' || m === 'flow' || m === 'campaign' || m === 'sms' || s === 'klaviyo' || s === 'salesfire' || s === 'shopify_email' || s === 'cartbite' || m.startsWith('email-')) return 'Email';
-
-    // Organic Social
-    if ((s.includes('facebook') || s === 'fb' || s.includes('instagram') || s === 'ig' || s === 'pinterest' || s.includes('pinterest.') || s === 'tiktok.com' || s === 'th' || s === 'linktree' || s === 'linktr.ee') && (m === 'referral' || m === 'social' || m === 'organic' || m === 'organicsocial')) return 'Organic Social';
-
-    // AI Assistants
-    if (s.includes('chatgpt') || s.includes('claude') || s.includes('perplexity') || s.includes('copilot') || s.includes('gemini') || m === 'ai-assistant') return 'AI Assistants';
-
-    // Affiliate
-    if (m === 'affiliate' || s.includes('uppromote') || s.includes('partnerize') || s.includes('awin')) return 'Affiliate';
-
-    // Referral (catch-all)
-    if (m === 'referral') return 'Referral';
-
-    return 'Other';
-  }
-
-  // Aggregate GA4 rows by reconstructed channel
-  const byChannel = {};
-  (ga4Rows||[]).forEach(r => {
-    const ch = classifyChannel(r.source, r.medium);
-    if (!byChannel[ch]) byChannel[ch] = { sessions: 0, conversions: 0, revenue: 0 };
-    byChannel[ch].sessions += parseFloat(r.sessions||0);
-    byChannel[ch].conversions += parseFloat(r.conversions||0);
-    byChannel[ch].revenue += parseFloat(r.transactionrevenue||0);
-  });
-
-  const channels = Object.entries(byChannel)
-    .map(([name, d]) => ({ name, ...d }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  // Totals
-  const totalSessions = channels.reduce((s, c) => s + c.sessions, 0);
-  const totalConv = channels.reduce((s, c) => s + c.conversions, 0);
-  const totalRev = channels.reduce((s, c) => s + c.revenue, 0);
-
-  // Paid social specific
-  const metaGa4 = byChannel['Paid Social — Meta'] || { sessions: 0, conversions: 0, revenue: 0 };
-  const ttGa4 = byChannel['Paid Social — TikTok'] || { sessions: 0, conversions: 0, revenue: 0 };
-
-  // Gap calculations
-  const metaGapConv = platform.metaPlatformConversions - metaGa4.conversions;
-  const metaGapPct = metaGa4.conversions > 0 ? (metaGapConv / metaGa4.conversions * 100) : 0;
-  const metaMultiplier = metaGa4.conversions > 0 ? (platform.metaPlatformConversions / metaGa4.conversions) : 0;
-
-  const ttGapConv = platform.ttPlatformConversions - ttGa4.conversions;
-  const ttGapPct = ttGa4.conversions > 0 ? (ttGapConv / ttGa4.conversions * 100) : 0;
-  const ttMultiplier = ttGa4.conversions > 0 ? (platform.ttPlatformConversions / ttGa4.conversions) : 0;
-
-  // Max for bar scaling
-  const maxConv = Math.max(...channels.map(c => c.conversions), 1);
-
-  const channelColor = (name) => {
-    if (name.includes('Meta')) return '#1877F2';
-    if (name.includes('TikTok')) return '#FF0050';
-    if (name.includes('Pinterest')) return '#E60023';
-    if (name === 'Paid Search') return '#34A853';
-    if (name === 'Organic Search') return '#FBBC04';
-    if (name === 'Direct') return '#9E9E9E';
-    if (name === 'Email') return '#EA4335';
-    if (name === 'Organic Social') return '#E91E63';
-    if (name === 'AI Assistants') return '#8B7CD8';
-    if (name === 'Affiliate') return '#FF6B35';
-    if (name === 'Referral') return '#8B7CD8';
-    return '#666666';
-  };
-
-  const html = `
-  <div style="padding:0 4px;">
-    <!-- Header -->
-    <div style="margin-bottom:24px;">
-      <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--text);margin:0 0 4px;">Attribution Gap Analysis</h2>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.5;">
-        Compares platform-claimed conversions (Meta, TikTok) against GA4 last-click attribution.
-        The gap is the structural undercount paid social experiences in last-click models — conversions where the platform created demand but another channel closed the sale.
-      </div>
-    </div>
-
-    <!-- META ATTRIBUTION GAP CARD -->
-    <div style="background:linear-gradient(135deg, rgba(24,119,242,0.08) 0%, rgba(24,119,242,0.02) 100%);border:1px solid rgba(24,119,242,0.3);border-radius:8px;padding:20px;margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;">META — Attribution Gap</div>
-        ${metaMultiplier > 0 ? `<div style="background:rgba(29,158,117,0.15);color:var(--green);padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;">${metaMultiplier.toFixed(1)}× understatement</div>` : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:end;">
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Meta platform claims</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:#1877F2;line-height:1;">${fmtN(platform.metaPlatformConversions)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">purchases · ${fmt(platform.metaPlatformRevenue)} revenue</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">GA4 last-touch credits</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--amber);line-height:1;">${fmtN(metaGa4.conversions)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">conversions · ${fmt(metaGa4.revenue)} revenue</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Attribution gap</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--green);line-height:1;">${fmtN(metaGapConv)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">purchases credited elsewhere</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TIKTOK ATTRIBUTION GAP CARD (only if TikTok connected) -->
-    ${platform.ttPlatformConversions > 0 ? `
-    <div style="background:linear-gradient(135deg, rgba(255,0,80,0.08) 0%, rgba(255,0,80,0.02) 100%);border:1px solid rgba(255,0,80,0.3);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;">TIKTOK — Attribution Gap</div>
-        ${ttMultiplier > 0 ? `<div style="background:${ttMultiplier < 1 ? 'rgba(226,75,74,0.15)' : 'rgba(29,158,117,0.15)'};color:${ttMultiplier < 1 ? 'var(--red)' : 'var(--green)'};padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;">${ttMultiplier < 1 ? 'TikTok under-claiming' : ttMultiplier.toFixed(1) + '× understatement'}</div>` : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:end;">
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">TikTok platform claims</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:#FF0050;line-height:1;">${fmtN(platform.ttPlatformConversions)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">conversions · ${fmt(platform.ttPlatformRevenue)} revenue</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">GA4 last-touch credits</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:var(--amber);line-height:1;">${fmtN(ttGa4.conversions)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">conversions · ${fmt(ttGa4.revenue)} revenue</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Gap</div>
-          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:${ttGapConv >= 0 ? 'var(--green)' : 'var(--red)'};line-height:1;">${ttGapConv >= 0 ? '+' : ''}${fmtN(ttGapConv)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${ttGapConv >= 0 ? 'credited elsewhere' : 'GA4 over-credits TikTok'}</div>
-        </div>
-      </div>
-    </div>` : ''}
-
-    <!-- INTERPRETATION NOTE -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:24px;font-size:12px;color:var(--text-dim);line-height:1.7;">
-      <strong style="color:var(--text);">Reading the gap:</strong> GA4 last-click only credits a channel when it's the <em>final</em> click before purchase. Conversions where Meta created the initial interest — but the customer returned later via Direct, Email, or Search — get credited to those channels.
-      <strong style="color:var(--text);">Neither number is wrong</strong> — they answer different questions. Meta says "we drove these sales". GA4 says "these sales closed via these channels". The truth sits between.
-    </div>
-
-    <!-- FULL CHANNEL BREAKDOWN -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">GA4 Last-Touch Channel Mix</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">All channels by GA4-attributed revenue · reconstructed from source/medium</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border);">
-            <th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;">Channel</th>
-            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:14%;">Sessions</th>
-            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:14%;">Conversions</th>
-            <th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:32%;">Volume</th>
-            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:16%;">Revenue</th>
-            <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:500;letter-spacing:0.5px;width:8%;">% Rev</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${channels.map(c => {
-            const pct = (c.conversions / maxConv) * 100;
-            const revPct = totalRev > 0 ? (c.revenue / totalRev * 100) : 0;
-            const color = channelColor(c.name);
-            return `
-              <tr style="border-bottom:1px solid var(--border);">
-                <td style="padding:10px;font-size:13px;color:var(--text);">
-                  <span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:2px;margin-right:8px;vertical-align:middle;"></span>${c.name}
-                </td>
-                <td style="padding:10px;font-size:13px;color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">${fmtN(c.sessions)}</td>
-                <td style="padding:10px;font-size:13px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">${fmtN(c.conversions)}</td>
-                <td style="padding:10px;">
-                  <div style="background:${color};height:8px;width:${pct}%;border-radius:2px;"></div>
-                </td>
-                <td style="padding:10px;font-size:13px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;">${fmt(c.revenue)}</td>
-                <td style="padding:10px;font-size:12px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums;">${revPct.toFixed(1)}%</td>
-              </tr>`;
-          }).join('')}
-          <tr style="border-top:2px solid var(--border);background:var(--bg4);">
-            <td style="padding:10px;font-size:12px;color:var(--text);font-weight:600;">TOTAL</td>
-            <td style="padding:10px;font-size:12px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">${fmtN(totalSessions)}</td>
-            <td style="padding:10px;font-size:12px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">${fmtN(totalConv)}</td>
-            <td></td>
-            <td style="padding:10px;font-size:12px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">${fmt(totalRev)}</td>
-            <td></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- METHODOLOGY -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:11px;color:var(--text-muted);line-height:1.6;">
-      <strong style="color:var(--text-dim);">Methodology:</strong> GA4 channels reconstructed from source/medium pairs using GA4's documented channel rules (Windsor.ai doesn't expose default_channel_grouping). Meta platform numbers from Windsor Facebook connector (7-day click / 1-day view). TikTok platform numbers from Windsor TikTok connector. Period totals: ${fmtN(totalConv)} GA4 conversions · ${fmt(totalRev)} GA4 revenue. ${platform.metaSpend > 0 ? `Meta spend: ${fmt(platform.metaSpend)}.` : ''} ${platform.ttSpend > 0 ? `TikTok spend: ${fmt(platform.ttSpend)}.` : ''}
     </div>
   </div>`;
 
