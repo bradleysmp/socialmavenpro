@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta name="cloudflare-email-obfuscation" content="off">
+<!-- OpenAI/ChatGPT Ads Measurement Pixel -->
+<script>!function(w,d,s,u){if(w.oaiq)return;var q=function(){q.q.push(arguments)};q.q=[];w.oaiq=q;var j=d.createElement(s);j.async=1;j.src=u;var f=d.getElementsByTagName(s)[0];f.parentNode.insertBefore(j,f)}(window,document,"script","https://bzrcdn.openai.com/sdk/oaiq.min.js");oaiq("init",{pixelId:"Q3pbe7dczgFm1s8XYVNBjG",debug:true});</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMPro | Paid Social Specialist for DTC Brands | Meta, TikTok & Pinterest Ads</title>
@@ -162,7 +163,6 @@
     gap: 2.5rem;
   }
   .mobile-menu.open { display: flex; }
-  .mobile-menu { -webkit-overflow-scrolling: touch; }
   .mobile-menu a {
     font-family: "Syne", sans-serif;
     font-size: 2rem;
@@ -525,46 +525,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 5rem;
-    align-items: start;
-  }
-  .about-photo-wrap {
-    position: relative;
-    border-radius: 20px;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-    aspect-ratio: 1/1;
-    max-width: 300px;
-  }
-  .about-photo-wrap img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-  }
-  .about-photo-badge {
-    position: absolute;
-    bottom: 1rem;
-    left: 1rem;
-    background: rgba(14,14,13,0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    padding: 0.4rem 1rem;
-    font-size: 0.75rem;
-    color: var(--cream);
-    letter-spacing: 0.04em;
-    display: flex;
     align-items: center;
-    gap: 0.5rem;
-  }
-  .about-photo-badge::before {
-    content: "";
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #4ade80;
-    flex-shrink: 0;
   }
   .about-text {
     font-size: 0.95rem;
@@ -700,8 +661,8 @@
 
   /* ANIMATIONS */
   .fade-up {
-    opacity: 1;
-    transform: translateY(0);
+    opacity: 0;
+    transform: translateY(24px);
     transition: opacity 0.6s ease, transform 0.6s ease;
   }
   .fade-up.visible { opacity: 1; transform: translateY(0); }
@@ -764,7 +725,6 @@
 
   /* RESPONSIVE */
   @media (max-width: 900px) {
-    .about-photo-wrap { max-width: 100%; }
     nav { padding: 1rem 1.5rem; }
     .nav-links { display: none; }
     .nav-hamburger { display: flex; }
@@ -792,27 +752,15 @@
 </style>
 </head>
 <body>
-<script>
-function toggleMenu() {
-  var menu = document.getElementById("mobileMenu");
-  if (menu.style.display === "flex") {
-    menu.style.display = "none";
-  } else {
-    menu.style.display = "flex";
-  }
-}
-</script>
 
 <!-- MOBILE MENU -->
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="toggleMenu()" aria-label="Close menu" style="min-width:44px;min-height:44px;touch-action:manipulation;">&#215;</button>
+  <button class="mobile-close" onclick="toggleMenu()" aria-label="Close menu">&#215;</button>
   <a href="#services" onclick="toggleMenu()">Services</a>
   <a href="#process" onclick="toggleMenu()">Process</a>
   <a href="#about" onclick="toggleMenu()">About</a>
   <a href="portfolio.html">Portfolio</a>
   <a href="scorecard.html">Free Scorecard</a>
-  <a href="playbooks.html">How I Work</a>
-  <a href="/tools">Free Tools</a>
   <a href="https://calendly.com/bradley-socialmavenpro/30min" target="_blank" class="mob-cta">Book a call</a>
 </div>
 
@@ -825,11 +773,9 @@ function toggleMenu() {
     <li><a href="#about">About</a></li>
     <li><a href="portfolio.html">Portfolio</a></li>
     <li><a href="scorecard.html">Free Scorecard</a></li>
-    <li><a href="playbooks.html">How I Work</a></li>
-    <li><a href="/tools">Free Tools</a></li>
     <li><a href="https://calendly.com/bradley-socialmavenpro/30min" target="_blank" class="nav-cta">Book a call</a></li>
   </ul>
-  <button class="nav-hamburger" onclick="toggleMenu()" aria-label="Open menu" style="min-width:44px;min-height:44px;touch-action:manipulation;">
+  <button class="nav-hamburger" onclick="toggleMenu()" aria-label="Open menu">
     <span></span><span></span><span></span>
   </button>
 </nav>
@@ -1041,10 +987,6 @@ function toggleMenu() {
         </ul>
       </div>
       <div class="about-visual fade-up" style="transition-delay:0.15s">
-        <div class="about-photo-wrap">
-          <img src="bradley.png" alt="Bradley Walker — Paid Social Specialist">
-          <div class="about-photo-badge">Available for new clients</div>
-        </div>
         <div style="font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem">Typical client outcomes</div>
         <div class="metric-row">
           <span class="metric-name">ROAS improvement</span>
@@ -1106,6 +1048,21 @@ function toggleMenu() {
 </footer>
 
 <script>
-  
+  function toggleMenu() {
+    document.getElementById("mobileMenu").classList.toggle("open");
+  }
 
-  document.addE
+  document.addEventListener("DOMContentLoaded", function() {
+    var els = document.querySelectorAll(".fade-up");
+    if ("IntersectionObserver" in window) {
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) { if (e.isIntersecting) e.target.classList.add("visible"); });
+      }, { threshold: 0.08 });
+      els.forEach(function(el) { observer.observe(el); });
+    } else {
+      els.forEach(function(el) { el.classList.add("visible"); });
+    }
+  });
+</script>
+</body>
+</html>
